@@ -1,0 +1,897 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class Fees_model extends CI_Model {
+	public function __construct() {
+		parent::__construct();
+	}
+
+	public function get_applications() {
+		return $this->get('application');
+	}
+
+	public function get_barangays() {
+		return $this->get('brgys', 'brgy_id, brgy', null, 'brgy_id')->result();
+	}
+    
+	public function get_amendment(){
+		return $this->get('amendment', 'id, description', null, 'id')->result();
+	}
+	public function get_application_type(){
+		 return $this->get('application_type', 'application_id, types', null, 'application_id')->result();
+	}
+	public function get_requirements($natureID = null) {
+		if(!is_null($natureID)) {
+			return $this->get('nature_requirements', 'requirements', array('buss_nature_id' => $natureID));
+		} else {
+			return false;
+		}
+	}
+
+	public function get_required_tfo($requiredTfoID) {
+		return $this->db->get_where('required_tfo', array('req_tfo_id' => $requiredTfoID));
+	}
+
+	public function get_types($type = null, $isType = false, $field = '', $order_by = '') {
+		if(!is_null($type)) {
+			if($isType && !empty($field)) {
+				return $this->get($type, $field, null, $order_by)->result();
+			} else {
+				return $this->get($type.'_type', $type.'_id, types', null, $type.'_id')->result();
+			}
+		} else {
+			return new stdClass();
+		}
+	}
+	
+	public function save_renew($data) {
+		$flag = false;
+		
+		if(is_array($data)) {
+			echo 'save';
+			$data['additional_requirements'] = json_encode($data['requirements']);
+			$i = 0;
+			foreach($data['gross'] as $g) {
+				$check = $this->db->get_where('business_line', array(
+					'app_id' => $data['app_id'],
+					'buss_nature_id' => $data['natureid'][$i]
+				));
+				if($check->num_rows() > 0) {
+					$this->db->update('business_line', array('gross' => json_encode(array(array(
+						'gross' => $g,
+						'year' => date('Y', time())
+					)))), array(
+						'app_id' => $data['app_id'],
+						'buss_nature_id' => $data['natureid'][$i]
+					));
+				} else {
+					$flag = true;
+					break;
+				}
+				$i++;
+			}
+			
+			if($flag) {
+				return false;
+			} else {
+				unset($data['natureid']);
+				unset($data['gross']);
+				unset($data['requirements']);
+				$this->db->update('applications', array('status' => 'renewed'), array('app_id' => $data['app_id']));
+				return $this->db->insert('renews', $data);
+			}
+		} else {
+			return false;
+		}
+	}
+	
+	//by boloi
+	
+	public function get_renew_requirements(){
+	//$table = '', $fields = '*', $where = null, $order_by = 'ID', $order = 'ASC'
+		return $this->get('additional_requirements','*', null,'add_reqt_id', 'ASC')->result();	
+	}
+	
+	//by boloi
+	public function get_taxpayers(){	  
+		  $this->db
+			 ->select('a.application_date,b.buss_id ,b.permit_number, b.business_name, b.created_at, o.owner_id,o.firstname, o.middlename, o.lastname')
+			 ->select('at.types AS app_type,p.types AS pay_type')
+			 ->from('businessess b')			
+			 ->join('applications a', 'b.application_id=a.app_id', 'left')
+			 ->join('application_type at', 'b.application_id=at.application_id', 'left')
+			 ->join('payment_type p', 'b.payment_id=p.payment_id', 'left')
+			 // ->join('payment_status ps', 'b.payment_status=ps.payment_status_id', 'left')
+			 ->join('owners o', 'b.owner_id=o.owner_id', 'left');  
+						
+		return $this->db->get();
+	}
+
+	/* -------------------
+	 * Get Business Owners
+	 * ------------------- */
+	public function get_owners($status) {
+    	$owners = array();
+		
+		$this->db
+    		->select('b.permit_number, b.business_name,b.date_applied')
+    		->select('o.owner_id, o.firstname, o.middlename, o.lastname')
+    		->select('a.app_id, a.buss_id,a.modified,a.application_date')
+			->select('at.application_id, at.types application_type')
+    		->from('applications a')
+    		->join('businessess b', 'a.buss_id=b.buss_id', 'inner')
+    		->join('owners o', 'b.owner_id=o.owner_id', 'inner')
+			//->join('business_line bl','bl.bl_buss_id=b.buss_id','inner')
+    		->join('application_type at', 'a.application_id=at.application_id', 'inner')
+			->order_by('b.permit_number','ASC');
+			
+    	if(!empty($status)) {
+    		$this->db->where('a.status', $status);
+    	}
+		
+
+		$results = $this->db->get();//print_r($results);		
+		//echo  $this->db->_error_message();
+		if($results->num_rows() > 0) {
+			foreach($results->result() as $r) {
+				$owners[] = $r;
+			}
+		}
+		
+		$renewed = $this->db
+    		->select('b.permit_number, b.business_name')
+    		->select('o.owner_id, o.firstname, o.middlename, o.lastname')
+    		->select('a.app_id, a.buss_id, at.application_id, at.types application_type, a.application_date')
+    		->from('applications a')
+    		->join('businessess b', 'a.buss_id=b.buss_id', 'inner')
+    		->join('owners o', 'b.owner_id=o.owner_id', 'inner')
+			->join('renews r', 'a.app_id=r.app_id', 'inner')
+    		->join('application_type at', 'r.application_id=at.application_id', 'inner')
+			->where('a.status', 'renewed')->get();
+		
+		if($renewed->num_rows() > 0) {
+			foreach($renewed->result() as $renew) {
+				array_push($owners, $renew);
+			}
+		}
+	
+		return $owners;
+    	// return $this->db->get();
+
+		// return $this->db
+		// 	->select('b.permit_number, b.business_name, b.trade_name, b.buss_id, b.owner_id')	// Select from Businessess Table
+		// 	->select('o.firstname, o.middlename, o.lastname')									// Select from Owners Table
+		// 	->select('a.application_date, a.app_id')											// Select from Applications Table
+		// 	->select('at.types application_type')												// Select from Application Types Table
+		// 	->from('applications a')
+		// 	->join('application_type at', 'a.application_id=at.application_id', 'inner')
+		// 	->join('businessess b', 'a.buss_id=b.buss_id', 'inner')
+		// 	->join('owners o', 'a.owner_id=o.owner_id AND b.owner_id=o.owner_id', 'inner')
+		// 	->get();
+	}
+
+	
+	public function get_to_assess_owner($status){
+	  $this->db->distinct()
+				 ->select(' o.owner_id, o.firstname, o.middlename, o.lastname')
+				 ->select('b.buss_id, b.permit_number, b.business_name,b.date_applied,b.application_id')
+				 ->select('at.types')
+				 ->select('a.modified')
+				 ->from('businessess b')
+				 ->join('owners o','b.owner_id=o.owner_id','inner')
+				// ->join('business_line bl','b.buss_id = bl.bl_buss_id','inner')
+				 ->join('application_type at','b.application_id = at.application_id','inner')
+				 ->join('applications a','b.buss_id= a.buss_id AND a.owner_id=o.owner_id','inner')
+				 ->order_by('b.permit_number','ASC');
+	
+			if(!empty($status)) {
+				$this->db->where('a.status', $status);
+			}
+			$results = $this->db->get();
+			if($results->num_rows() > 0) {
+				foreach($results->result() as $r) {
+					$owners[] = $r;
+				}
+			}
+			return $owners;
+		//return  $this->db->get();
+	}
+	public function getApprovalList() {
+    	return  $this->db
+			//->distinct()
+    		->select('b.permit_number, b.business_name')
+    		->select('o.firstname, o.middlename, o.lastname')
+    		->select('a.app_id, a.buss_id, a.application_date, apptype.types application_type')
+    		->select('assess.status, assess.assessment_id, assess.total_tax_due, assess.assessment_date, pt.payment_id')			
+    		->from('assessments assess')
+    		->join('applications a', 'assess.app_id=a.app_id', 'inner')
+    		->join('owners o', ' a.owner_id=o.owner_id', 'inner')
+    		->join('businessess b', 'a.buss_id=b.buss_id', 'inner')
+    		->join('application_type apptype', 'a.application_id=apptype.application_id', 'inner')
+    		->join('payment_type pt', 'b.payment_id=pt.payment_id', 'inner')
+			->get();
+    		/*- >where(array(
+    			'assess.status' => 'unpaid',
+    			'assess.approved' => 'N'
+    		)) */
+			
+			//echo $this->db->last_query();
+			/* return	$this->db
+					->distinct()
+					->select('assess.app_id,assess.status')
+					->select('b.permit_number,b.business_name,')
+					->select('o.firstname,o.middlename,o.lastname,')
+					->select('a.application_date,at.types application_type')
+					->from('assessments assess')
+					->join('applications a', 'assess.app_id=a.app_id', 'inner')
+					->join('owners o', ' a.owner_id=o.owner_id', 'inner')
+					->join('businessess b', 'a.buss_id=b.buss_id', 'inner')
+					->join('application_type at', 'a.application_id=at.application_id', 'inner')
+					->where(array(
+							'assess.status' => 'unpaid',
+							'assess.approved' => 'N'
+					))->get(); */
+			//echo $this->db->_error_message();
+			//echo $this->db->last_query();
+	}
+
+	public function get_approval_list() {
+		return $this->db
+    		->select('b.permit_number, b.business_name')
+    		->select('o.firstname, o.middlename, o.lastname')
+    		->select('app.app_id, app.application_date')
+    		->select('a.assessment_id, a.buss_id, a.owner_id, a.status, a.approved')
+    		->select('at.types application_type')
+    		->from('assessments a')
+    		->join('owners o', 'a.owner_id=o.owner_id', 'inner')
+    		->join('businessess b', 'a.buss_id=b.buss_id', 'inner')
+    		->join('applications app', 'b.buss_id=app.buss_id', 'inner')
+    		->join('application_type at', 'app.application_id=at.application_id', 'inner')
+    		->where('a.status', 'unpaid')
+    		->get();
+	}
+
+	public function getAssessment($appID) {
+    	$business = $this->db
+    		->distinct()
+    		->select('o.owner_id, o.firstname, o.middlename, o.lastname')
+    		->select('b.buss_id, b.payment_id, b.business_name, b.trade_name, b.street_address')
+    		->select('bn.business_nature, bn.requirements')
+    		->select('pt.types payment_type')
+    		->select('a.app_id, a.application_id,a.application_date')
+			->select('bl.bus_line_id,bl.buss_nature_id, bl.capital, bl.gross, bl.requirements requirements_submitted')
+			->select('assess.app_id assess_app_id,assess.status as assess_status,assess.breakdowns,assess.assessment_date')
+    		->from('business_line bl')
+    		->join('businessess b', 'bl.bl_buss_id=b.buss_id', 'inner')
+    		->join('applications a', 'bl.app_id=a.app_id', 'inner')
+    		->join('owners o', 'b.owner_id=o.owner_id', 'inner')
+    		->join('business_nature bn', 'bl.buss_nature_id=bn.buss_nature_id', 'inner')
+    		->join('payment_type pt', 'b.payment_id=pt.payment_id', 'inner')
+			->join('assessments assess','assess.app_id=a.app_id','left')
+    		->where('a.app_id', $appID)			
+    		->get();
+			//echo $this->db->_error_message();
+    		//echo $this->db->last_query();
+    	$missing = array();
+		$gross = array();
+		$required = array();
+		$required_tfo = array();
+		$ignores = array();
+		$due_date = array();
+		$add_surcharge = array(); 
+		$assessment_years ='';
+		$renewed;		
+		$diff_years = 0;
+		$number_of_months = 0;		
+		$surcharge;
+		$next_assessment_year = '';
+		$recent_year = date('Y');		
+		$today = date('Y-m-d');
+		$sameastoday = '';
+		
+		if($business->num_rows() > 0) { 
+			$business = $business->result();
+			$businesses = array();
+			
+			$i = 0;
+			foreach ($business as $b) {
+				$breakdowns = (array)json_decode($b->breakdowns);			
+				$requirements = (array)json_decode($b->requirements);
+				$submitted = (array)json_decode($b->requirements_submitted);
+				$missing = array_diff($requirements, $submitted);
+				$gross = (array)json_decode($b->gross);
+				$assess_date = (empty($b->assessment_date)) ? strtotime(date('Y-m-d',strtotime($b->application_date))) : strtotime(date('Y-m-d',strtotime($b->assessment_date))); 
+				$assessment_year = (date('Y',strtotime($b->assessment_date)));
+				
+				// Get Missing Requirements
+				foreach ($missing as $item) {
+					$req = $this->db
+						->select('r.description')
+						->from('requirements r')
+						->where('requirement_id', $item)
+						->get();
+						
+					if($req->num_rows() > 0) {
+						$r = $req->row();
+						$required[$i][] = $r->description;
+					} else {
+						//do nothing
+					}
+				}
+				
+				// Get TFO
+				
+				$tfo = $this->db
+					->select('t.tfo, t.amount, t.tfo_id, t.payment_id,t.type tfo_type')
+					->select('r.req_tfo_id, r.value, r.variables, r.type')
+					->from('required_tfo r')
+					->join('tfo t', 'r.tfo_id=t.tfo_id', 'inner')
+					->join('business_nature b', 'r.buss_nature_id=b.buss_nature_id', 'inner')
+					->where(array(
+						'r.buss_nature_id' => $b->buss_nature_id
+					))
+					->or_where('t.all', 1)->get();				
+				
+				// Check if the business is already assessed
+				$check = $this->db
+							  ->select('assessment_date')
+							  ->from('assessments')
+							  ->like(array ('assessment_date' =>date('Y',strtotime($today)),
+											'app_id' => $b->app_id))
+							  ->get();
+				//echo $this->db->last_query();	  
+				// Get Due Date base on payment mode and application id [1--New 2--Renew] of the business
+			if($b->application_id == 1){	
+				if ($b->payment_id == 1){
+				$field = 'Annual';
+					$due_date = $this->db
+									 ->select('s.value,s.field')
+									 ->from('settings s')
+									 ->like(array ('field' =>$field, 'value' =>$recent_year))
+									 ->get();
+				} else if ($b->payment_id == 2){ 
+					$field = 'Semester';
+					$due_date = $this->db
+									 ->select('s.value,s.field')
+									 ->from('settings s')								
+									  ->like(array ('field' =>$field, 'value' =>$recent_year))
+									 ->get();
+									// echo $this->db->last_query();
+									
+				} else if ($b->payment_id == 3){ 
+					$field = 'quarter';
+					$due_date = $this->db
+									 ->select('s.value,s.field')
+									 ->from('settings s')									
+									  ->like(array ('field' =>$field, 'value' =>$recent_year))
+									 ->get();
+				}
+			} else {
+				if ($b->payment_id == 1){
+				$field = 'Annual';
+					$due_date = $this->db
+									 ->select('s.value,s.field')
+									 ->from('settings s')
+									 ->like('field',$field)
+									 ->get();
+				} else if ($b->payment_id == 2){
+					$field = 'Semester';
+					$due_date = $this->db
+									 ->select('s.value,s.field')
+									 ->from('settings s')
+									 ->like('field',$field)
+									 ->get();
+				} else if ($b->payment_id == 3){
+					$field = 'quarter';
+					$due_date = $this->db
+									 ->select('s.value,s.field')
+									 ->from('settings s')
+									 ->like('field',$field)
+									 ->get();
+				}
+			}	
+				$new_due1 = $due_date->result();
+				$assessment_date = date('Y',strtotime($b->assessment_date));
+				$store_assessment_date = date('Y-m-d',strtotime(date('Y-m-d',strtotime(date($b->assessment_date))) . ' +365 days')); // add one year to the assessment date
+				$diff = strtotime(date($today)) - strtotime($store_assessment_date);
+				$diff_years = floor(($diff)/(60*60*24*365)); 
+				//$next_assessment_year = date('Y',strtotime($store_assessment_date));
+				$assessment_years = json_encode(range($store_assessment_date,date('Y',strtotime($today))));
+				
+				//Check if business has back tax but no computation yet
+				//Owner must give the gross of the previous year first
+				//before computing
+				//foreach ($new_due1 as $due){
+					//$due = strtotime(date('Y-m-d',strtotime($due->value)));		
+					
+					if (!empty($b->assessment_date)){ //echo 'if';//assessment_date not empty, it means assessment has happened						
+						if((date('Y',strtotime($b->application_date))) == (date('Y',strtotime($b->assessment_date)))){ //test if assessment and application happens at the same year
+							/* $store_assessment_date = date('Y-m-d',strtotime(date('Y-m-d',strtotime(date($b->assessment_date))) . ' +365 days')); // add one year to the previous assessment date
+							$diff = strtotime(date($today)) - strtotime($store_assessment_date);
+							$diff_years = floor(($diff)/(60*60*24*365)); 
+							$next_assessment_year = date('Y',strtotime($store_assessment_date)); */
+							$renewed = 1;
+								if ($diff_years >=1){ //echo 'inner if';
+									$surcharge = $this->db
+												  ->select('surcharge,interest')
+												  ->from('surcharge')
+												  ->like('date_renew',date('Y',strtotime($today)))
+												  ->get();
+									$add_surcharge = $surcharge->result();
+									$number_of_months = (int)($diff_years * 12);																
+									
+								}
+						} else { echo 'else';
+						
+						$renewed = 0;
+						$surcharge = $this->db
+											  ->select('surcharge,interest')
+											  ->from('surcharge')
+											  ->like('date_renew',date('Y',strtotime($today)))
+											  ->get();
+						$add_surcharge = $surcharge->result();
+						}
+					}else { // no assessment happened yet from the time of application
+					/* $store_assessment_date = date('Y-m-d',strtotime(date('Y-m-d') . ' -365 days')); // sets the year to today's year
+					$diff = strtotime(date($today)) - strtotime($store_assessment_date);
+					$diff_years = floor(($diff)/(60*60*24*365)); 
+					$next_assessment_year = date('Y',strtotime($store_assessment_date)); */
+					
+							if (date('Y',strtotime($b->application_date)) == date('Y',strtotime($today))){ //check if application year = today's year
+								$renewed = 0;
+								
+								
+							} else { // application year != today's year
+								//$add_surcharge = 1;
+									$renewed = 0;
+							}
+					}
+				//}
+				$ignores[$i][] = ($check->num_rows() > 0) ? true : false;
+				//$ignores[$i][] = (empty($b->assess_app_id)) ? false : true;
+				$required_tfo[] = $tfo->result();
+				$businesses[] = $b;
+				$i++;
+
+				
+			}
+			//check if breakdown's year is equal to today's year
+			
+			if (!empty($breakdowns)){
+				$breakdowns = (date('Y',strtotime($breakdowns[0]->dues)) == (date ('Y',strtotime($today)))) ?  (array)json_decode($b->breakdowns) : array();
+			}
+			return array(				
+				'breakdowns' =>$breakdowns,
+			    'renewed' => $renewed,
+				'diff_years' =>$diff_years,
+				'assessment_years' => $assessment_years,
+				'add_surcharge' =>$add_surcharge,
+				'number_of_months' =>$number_of_months,
+				'business' => $business,
+				'required' => $required,
+				'tfos' => $required_tfo,
+				'ignore' => $ignores,
+				'due_date' =>$new_due1
+			);
+		} else {
+			return array(
+						'error'  =>'Please check Required TFO for this business nature'
+						);
+			
+		}
+	}
+
+	//Re assessment 
+	
+	public function getReAssessment($ownerID) {
+    	$business = $this->db
+    		->select('o.owner_id, o.firstname, o.middlename, o.lastname')
+    		->select('b.buss_id, b.payment_id, b.business_name, b.trade_name, b.street_address')
+    		->select('bn.business_nature, bn.requirements')
+    		->select('pt.types payment_type')
+    		->select('a.app_id, a.application_id, bl.buss_nature_id, bl.capital, bl.gross, bl.requirements requirements_submitted')
+    		->from('business_line bl')
+    		->join('businessess b', 'bl.buss_id=b.buss_id', 'inner')
+    		->join('applications a', 'bl.app_id=a.app_id', 'inner')
+    		->join('owners o', 'b.owner_id=o.owner_id', 'inner')
+    		->join('business_nature bn', 'bl.buss_nature_id=bn.buss_nature_id', 'inner')
+    		->join('payment_type pt', 'b.payment_id=pt.payment_id', 'inner')
+    		->where('o.ownerid', $ownerID)
+    		->get();
+			
+    		//echo $this->db->last_query();
+    	$missing = array();
+		$required = array();
+		$required_tfo = array();
+		$ignores = array();
+		$due_date = array();
+		if($business->num_rows() > 0) { 
+			$business = $business->result();
+			$businesses = array();
+			//print_r($business);
+			$i = 0;
+			foreach ($business as $b) {
+				$requirements = (array)json_decode($b->requirements);
+				$submitted = (array)json_decode($b->requirements_submitted);
+				$missing = array_diff($requirements, $submitted);
+
+				// Get Missing Requirements
+				foreach ($missing as $item) {
+					$req = $this->db
+						->select('r.description')
+						->from('requirements r')
+						->where('requirement_id', $item)
+						->get();
+
+					if($req->num_rows() > 0) {
+						$r = $req->row();
+						$required[$i][] = $r->description;
+					} else {
+						return false;
+					}
+				}
+
+				// echo '<pre>'; print_r($requirements); echo '</pre>';
+
+				// Get TFO
+				$tfo = $this->db
+					->select('t.tfo, t.amount, t.tfo_id, t.payment_id')
+					->select('r.req_tfo_id, r.value, r.variables, r.type')
+					->from('required_tfo r')
+					->join('tfo t', 'r.tfo_id=t.tfo_id', 'inner')
+					->join('business_nature b', 'r.buss_nature_id=b.buss_nature_id', 'inner')
+					->where(array(
+						'r.buss_nature_id' => $b->buss_nature_id
+					))
+					->or_where('t.all', 1)->get();
+
+				// Check if the business is already assessed
+				$check = $this->db->get_where('assessments', array(
+					'app_id' => $b->app_id
+				));
+
+				$ignores[$i][] = ($check->num_rows() > 0) ? true : false;
+				$required_tfo[] = $tfo->result();
+				$businesses[] = $b;
+				$i++;
+				
+				  
+			// Get Due Date base on payment mode of the business
+				if ($b->payment_id == 1){
+				/* $due_date = $this->db
+								 ->select('') */
+				} else if ($b->payment_id == 2){
+					$field = 'Semester';
+					$due_date = $this->db
+									 ->select('s.value')
+									 ->from('settings s')
+									 ->like('field',$field)
+									 ->get()->result();
+				} else if ($b->payment_id == 3){
+					$field = 'quarter';
+					$due_date = $this->db
+									 ->select('s.value')
+									 ->from('settings s')
+									 ->like('field',$field)
+									 ->get()->result();
+				}
+			}
+			
+			return array(
+				'business' => $business,
+				'required' => $required,
+				'tfos' => $required_tfo,
+				'ignore' => $ignores,
+				'due_date' =>$due_date
+			);
+		} else {
+			return false;
+		}
+	}
+
+	public function get_assessment($owner_id, $buss_id) {
+		$business = $this->db
+			->select('b.buss_id, b.owner_id, b.business_name, b.trade_name, b.street_address')	// Select from Businessess Table
+			->select('o.firstname, o.middlename, o.lastname')									// Select from owners table
+			->select('a.app_id, a.capital, a.gross, a.requirements requirements_submitted, a.buss_nature_id')				// Select from applications table. Gross is a JSON Data
+			->select('bn.business_nature, bn.requirements')		// Select from business nature table. Requirements is a JSON Data
+			->select('p.types payment_type')
+			->from('businessess b')
+			->join('owners o', 'b.owner_id=o.owner_id', 'inner')
+			->join('applications a', 'b.buss_id=a.buss_id', 'inner')
+			->join('business_nature bn', 'a.buss_nature_id=bn.buss_nature_id', 'inner')
+			->join('payment_type p', 'b.payment_id=p.payment_id', 'inner')
+			->where('a.owner_id', $owner_id)
+			->get();
+
+		$missing = array();
+		$required = array();
+		$required_tfo = array();
+
+		if($business->num_rows() > 0) {
+			$business = $business->result();
+			$businesses = array();
+
+			foreach ($business as $b) {
+				$requirements = json_decode($b->requirements);
+				$submitted = json_decode($b->requirements_submitted);
+				$missing = array_diff($requirements, $submitted);
+				
+				// Get Missing Requirements
+				foreach ($missing as $item) {
+					$req = $this->db
+						->select('r.description')
+						->from('requirements r')
+						->where('requirement_id', $item)
+						->get();
+
+					if($req->num_rows() > 0) {
+						$r = $req->row();
+						$required[] = $r->description;
+					} else {
+						return false;
+					}
+				}
+
+				// Get TFO
+				$tfo = $this->db
+					->select('t.tfo, t.amount, t.tfo_id')
+					->select('r.req_tfo_id, r.value, r.variables, r.type')
+					->from('required_tfo r')
+					->join('tfo t', 'r.tfo_id=t.tfo_id', 'inner')
+					->join('business_nature b', 'r.buss_nature_id=b.buss_nature_id', 'inner')
+					->where(array(
+						'r.buss_nature_id' => $b->buss_nature_id
+					))
+					->or_where('t.all', 1)->get();
+
+				// Check if the business is already assessed
+				$check = $this->db->get_where('assessments', array(
+					'owner_id' => $owner_id,
+					'buss_id' => $buss_id
+				));
+				$businesses[] = $b;
+			}
+
+			echo '<pre>'; print_r($businesses); echo '</pre>'; exit;
+
+			return array(
+				'business' => $business,
+				'required' => $required,
+				'tfos' => $tfo->result(),
+				'ignore' => ($check->num_rows() > 0) ? true : false
+			);
+		} else {
+			return false;
+		}
+	}
+
+	// public function get_assessment($owner_id = null, $buss_id = null) {
+	// 	$this->db->distinct()
+	// 		->select('o.firstname, o.middlename, o.lastname')
+	// 		->select('b.business_name, b.street_address')
+	// 		->select('pt.types payment_type')
+	// 		->select('a.capital, bn.business_nature')
+	// 		->select('t.amount, t.tfo')
+	// 		->from('businessess b')
+	// 		->join('owners o', 'b.owner_id=o.owner_id', 'inner')
+	// 		->join('applications a', 'o.owner_id=a.owner_id AND b.buss_id=a.buss_id', 'inner')
+	// 		->join('business_nature bn', 'a.buss_nature_id=bn.buss_nature_id', 'inner')
+	// 		->join('payment_type pt', 'b.payment_id=pt.payment_id', 'inner')
+	// 		->join('required_tfo rt', 'bn.buss_nature_id=rt.buss_nature_id')
+	// 		->join('tfo t', 'rt.tfo_id=t.tfo_id', 'inner')
+	// 		->where(array ('o.owner_id' =>$owner_id, 'b.buss_id' =>$buss_id))
+	// 		->get();
+	// 		echo $this->db->_error_message();exit;
+	// 		// echo $this->db->last_query(); exit;
+	// 	if(!is_null($owner_id) && !is_null($buss_id)){
+	// 	} else {
+	// 		return false;
+	// 	}
+	// }	
+
+	/* ---------------------------------
+	 * Get Payment Details for Printing
+	 * ---------------------------------*/
+	public function get_payment_details($paymentID) {
+		
+		/* return $this->db
+			->select('o.firstname, o.middlename, o.lastname')
+			->select('p.or_number, p.payment_date')
+			->select('br.brgy')
+			->select('b.business_name, b.permit_number, b.street_address')
+			->from('payments p')
+			->join('owners o', 'p.owner_id=o.owner_id', 'inner')
+			->join('businessess b', 'p.buss_id=b.buss_id', 'inner')
+			->join('brgys br', 'o.brgy_id=br.brgy_id', 'inner')
+			->where(array(
+				'p.status' => 'pending',
+				'p.pay_id' => $paymentID
+			))->get(); */
+			return $this->db
+			->select('o.firstname, o.middlename, o.lastname')
+			->select('p.or_number, p.payment_date')
+			->select('br.brgy')
+			->select('b.business_name, b.permit_number, b.street_address')
+			->from('payments p')
+			->join('owners o', 'p.owner_id=o.owner_id', 'inner')
+			->join('businessess b', 'p.buss_id=b.buss_id', 'inner')
+			->join('brgys br', 'o.brgy_id=br.brgy_id', 'inner')
+			->join('releasing r' ,'r.payment_id = p.pay_id','inner')
+			->where(array(
+				'p.status' => 'pending',
+				'r.payment_id' => $paymentID
+			))->get();
+			/* echo $this->db->last_query();
+			echo $this->db->_error_message(); */
+	}
+
+	private function get($table = '', $fields = '*', $where = null, $order_by = 'ID', $order = 'ASC') {
+		$this->db
+			->select($fields)
+			->from($table);
+
+		if(!is_null($where)) {
+			$this->db->where($where);
+		}
+			
+		return $this->db->order_by($order_by, $order)
+			->get();
+	}
+
+	
+	public function assess_now($data = array()) {
+		//print_r($data);
+		if(!empty($data)) {
+			$i=0;
+			/* this line is for multiple line of business
+			foreach ($data['app_id'] as $d){				
+				$check = $this->db->get_where('assessments', array(
+					'app_id' => $data['app_id'][$i],
+					'status' => 'unpaid'
+				));
+				$i++;
+			}		 */	
+				/* $check = $this->db->get_where('assessments', array(
+					'app_id' => $data['app_id'],
+					'status' => 'unpaid'
+				));			
+				if($check->num_rows() > 0) { echo 'naa';
+					echo $this->db->_error_message();
+				} else {  */
+					/* 
+					this line is for multiple line of business
+					 
+					 
+					$count = count($data['app_id']);
+					$app_ids = array();	
+					$cnt =0;
+					for($a=0;$a<$count;$a++){
+						
+						$item = array(
+									'app_id' => $data['app_id'][$a],
+									'application_id' =>$data['application_id'][$a],
+									'total_tax_due' =>$data['total_tax_due'][$a],
+									'breakdowns' =>$data['breakdowns']
+						);
+					$cnt++;
+					} */
+						/*this code is for individual ang payments*/
+						if($data['payment_mode'] == 1){
+							unset($data['total']);
+							$data['payment'] = 'Annual';							
+							$this->db->insert('assessments', $data);
+							echo $this->db->_error_message();
+							return true;
+						} else if ($data['payment_mode'] == 2){
+							//$semi_annual = array('first_semi_annual','second_semi_annual');
+							
+							$item['app_id'] = $data['app_id'];
+							$item['application_id'] = $data['application_id'];
+							$item['payment'] = $data['payment'];
+							$item['semi_annually'] = $data['first_semi_annual'];
+							$item['breakdowns'] = $data['breakdowns'];
+							$item['total_tax_due'] = $data['total_tax_due'];
+							//print_r($item);
+							$this->db->insert('assessments', $item);
+																				
+							return true;
+						} else if ($data['payment_mode'] == 3){
+							//$quarter = array('first_quarter','second_quarter','third_quarter','fourth_quarter');
+								//for($i=0;$i<count($quarter); $i++){
+									$item['app_id'] = $data['app_id'];
+									$item['application_id'] = $data['application_id'];
+									$item['payment'] = $data['payment'];
+									$item['quarterly'] = $data['first_quarter'];
+									$item['breakdowns'] = $data['breakdowns'];
+									$item['total_tax_due'] = $data['total_tax_due'];
+									//print_r($item);
+									$this->db->insert('assessments', $item);
+								//}
+							return true;
+						}
+						
+				//}
+		} else {
+			return false;
+		}
+		//echo $this->db->_error_message();
+	}
+
+	// re assessment
+	public function re_assess_now($data = array()) { //print_r($data);
+		if(!empty($data)) {
+			$check = $this->db->get_where('assessments', array(
+				'app_id' => $data['app_id'],
+				'status' => 'unpaid'
+			));
+			
+			if($check->num_rows() > 0) {
+
+			} else {
+				// $data['tfo'] = json_encode($data['fees']);
+				// unset($data['fees']);
+				$ret = array ('assessments'  => $this->db->insert('assessments', $data),
+							  'busines_line' => $this->db->update('business_line',array(
+																  'modified' => '0'
+																))
+							 );
+				return $ret;
+				//return $this->db->insert('assessments', $data);
+				// echo $this->db->_error_message();
+			}
+		} else {
+			return false;
+		}
+	}
+	
+	public function clear_requirements($natureID = null, $appID) {
+		if(!is_null($natureID)) {
+			$check = $this->db
+				->select('requirements')
+				->from('business_nature')
+				->where('buss_nature_id', $natureID)
+				->get();
+
+			if($check->num_rows() > 0) {
+				$requirements = $check->row();
+				$ret = array ('applications' => $this->db->update('applications', array(
+																  'requirements' => $requirements->requirements
+																), array(
+																'app_id' => $appID
+																)),
+							  'buss_lines'	=>	$this->db->update('business_line', array(
+																  'requirements' => $requirements->requirements
+																), array(
+																'app_id' => $appID
+																)));
+				
+				/* return $this->db->update('applications', array(
+					'requirements' => $requirements->requirements
+				), array(
+					'app_id' => $appID
+				)); */
+				return $ret;
+			} else {
+				return false;
+			}
+		} else {
+			return false;
+		}
+	}
+	
+	public function add_gross ($bus_line_id = null, $year = null, $gross = null){
+	
+		if(!is_null ($bus_line_id)){
+				$info_gross = json_encode(array(array('year'=>$year, 'gross'=>$gross)));	
+		 		 return $this->db->update('business_line',array('gross' =>$info_gross),array('bus_line_id' =>$bus_line_id));
+										
+		/* echo $this->db->_error_message();
+		echo $this->db->last_query();
+			 */
+		} else {		
+			return false;
+		}
+	
+	}
+
+}

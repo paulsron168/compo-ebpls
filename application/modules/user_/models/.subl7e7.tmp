@@ -1,0 +1,153 @@
+<?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
+
+class Users_model extends CI_Model {
+	public function __construct() {
+		parent::__construct();
+	}
+	//Getting user's data from database 
+	public function getLogin($username=null, $password=null){
+		$result = $this->db
+			->from('users')
+			->where('username',$username)
+			->where('password',$password)
+			->get();
+
+		if($result->num_rows() > 0 )
+			{
+				return $result->row();
+			} 
+		else
+			{
+				return false;
+			}
+	}
+
+	public function getnames($firstname=null, $lastname=null){
+		$result=$this->db
+				->from('users')
+				->where('firstname', $firstname)
+				->where('lastname', $lastname)
+				->get();
+				if($result->num_rows() > 0){
+					return $result->row();
+				}
+				else{
+					return false;
+				}
+	}
+	private function hash_password($userID, $password) {
+		$pass = $this->db->get_where('users', array('user_id' => $userID));
+		if($pass->num_rows() > 0) {
+			$dbPass = $pass->row();
+
+		} else {
+			return false;
+		}
+	}
+
+	public function display_users($userid = null){
+		$result =  $this->db->select('*')
+				->from('users')
+				->where('user_id',$userid)
+				->get();	
+
+				if($result->num_rows>0)
+				{
+					return $result->row();
+				}		
+				else
+				{
+					return false;
+				}
+	}
+
+	//ADDING NEW USER
+	public function add_users($data = array()) { 
+		 if(is_array($data)) {
+		 	$user = $this->db->get_where('users', array('username'=>ucfirst($data['username'])));
+		 	if($user->num_rows()>0){
+		 		return false;
+		 	}
+			if(isset($data['user_id'])) {
+				return $this->db->update('users', $data, array('user_id' => $data['user_id']));
+			} else {	
+				$data['level_id'] = '1';
+				$data['online_status'] = 'Online';
+				$data['created_at'] = date('Y-m-d H:i:s');
+				
+				return $this->db->insert('users', $data);
+
+			}
+		} else {
+			return false;
+		}  
+	}
+
+
+//SETTING SESSION TO ALL THE DATAS
+	public function set_session($firstname, $lastname,$uname){
+		$sql=$this->db->select('user_id')
+			->from('users')
+			->where('username',$username)	
+			->get();
+		$row = $sql->num_rows();
+
+		$sess_data = array(
+				'user_id' =>$row->user_id,
+				'firstname' => $firstname,
+				'lastname' =>$lastname
+			);
+		$this->session->set_userdata($sess_data);
+
+	}
+	//Getting USERS details for editing
+	public function users_details($userid=null) { 
+		return $this->db->select('*')
+				->get('users');
+
+	}
+	public function get_user_type($levelid =null){
+	return $this->db->select('*')
+				->get('user_level');
+	}
+	public function get_all_users($uid=array()) {
+		if(!is_null($uid)){
+			return $this->db
+			 ->select('user_id,username,password,firstname, lastname')
+			 ->from('users')			
+			 ->where('user_id',$uid)
+			 ->get();
+			// echo $uid;
+		} else {
+			return false;
+		}
+	}
+
+public function update_users($data = array()) {
+		if(is_array($data)) {
+			//print_r($data['date_renew']);
+			return $this->db->update('users', $data, array('user_id' => $data['user_id']));
+		}
+	}
+
+	//DELETE USERS
+		public function delete_users($userid = null) {
+		
+		if(!is_null($userid)) {
+			return $this->db->delete('users', array('user_id' => $userid));
+		} else {
+			return false;
+		}
+	}
+
+		public function logoff($userid = null) {
+		
+		if(!is_null($userid)) {
+			$data['online_status'] = 'Offline';
+			return $this->db->update('users', $data,array('user_id' => $userid));
+		} else {
+			return false;
+		}
+	}
+
+}

@@ -1,0 +1,13 @@
+.verticaltext {
+    transform: rotate(-90deg);
+    transform-origin: left;, top;
+    -ms-transform: rotate(-90deg);
+    -ms-transform-origin:left, top;
+    -webkit-transform: rotate(-90deg);
+    -webkit-transform-origin:left, top;
+
+    position: absolute; bottom: 0%; left: 0%;
+    
+    text-align: left;
+    border-bottom: 6px solid ;
+}

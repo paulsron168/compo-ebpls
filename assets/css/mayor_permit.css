@@ -1,0 +1,124 @@
+
+h1 {
+		text-align:center;
+	}
+h2 {
+		text-align:center
+	}
+h3 {
+		text-align:center
+	}
+h5 {
+		text-align:center!important;
+		margin-top: 3px!important;
+		margin-bottom: 15px!important;
+	
+	}
+
+
+
+div.absolute {
+	    position: absolute;
+	    top: 100px; 
+	    width: 120px;
+	    height: 120px;
+	    border: 1px solid black;
+	    right: 75px;
+	}
+div.stamp {
+	  /*  position: absolute;	 */
+	    float: left;
+	    width: 130px;
+	    height: 130px;
+	    border: 1px solid black;
+	    margin-left: 90px;	    
+	}
+div.stamp2{
+	    position: absolute;	 
+	    width: 100px;
+	    height: 100px;
+	    border: 1px solid black;
+	    margin-left: 90px;	 
+	    visibility: hidden;   
+	}
+
+
+#lgo{
+		margin-left: 180px;
+	}
+	
+#no2{
+		font-family: "Arial" ;
+		font-size:13px;
+		margin-left:125px;
+		margin-top: 60px;
+	}
+.header {
+		font-family: 'Arial';
+		font-size:18px;	
+		font-weight: bold;
+		text-align: justify;	
+		
+	}
+
+.may{
+		font-family: 'Arial';
+		font-size: 12px;	
+		font-weight: bold;
+		margin-top: 60px;
+		text-align: center;
+	}
+.boxed {
+		width: 75px;
+		height: 75px;
+	 	border: 1px solid black ;
+	 	margin-right: 180px;
+	 	
+	}
+.permit_body{
+		font-family: 'Arial';
+		font-size: 16px;
+		text-align: center;	
+		margin-bottom: 20px;
+		
+	}
+.permit_body_left{
+		text-align: left;
+		margin-top: -10px;
+		margin-left: 99px;
+		font-size: 16px;		
+	
+	}
+.name_applicant{
+		font-family: 'Arial';
+		margin-top: -10px;
+		margin-left: 360px;
+		font-size: 12px;
+	}
+.ok{
+		font-family: 'Arial';
+		font-style: italic;
+		font-size: 12px;
+		text-align: center;
+}
+
+/*@media print {
+	.collage_bg {
+			background-color: white !important;*/
+			/*background: url('../assets/img/municipal_hall.jpg') !important;
+			background-image: url('../assets/img/municipal_hall.jpg');*/
+				
+		/*}
+		body{*/
+		/*margin-top: 5%;
+		margin-bottom:5%;*/
+		/*opacity: 0.5;*/
+		/*background-image: url("municipal_hall.jpg") !important; */
+		/*background-image: linear-gradient(to bottom, rgba(0,0,0,0) 0%,rgba(0,0,0,0.6) ), url("municipal_hall.jpg") !important;
+		background: linear-gradient(rgba(255,255,255,.8), rgba(255,255,255,.8)), url("municipal_hall.jpg.png") !important;
+		background-size: 1000px 1000px !important;
+		background-repeat: no-repeat !important;
+		background-position: center !important;*/
+		/*height: 10% !important;*/
+	/*}
+	}*/

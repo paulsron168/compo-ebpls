@@ -1,0 +1,78 @@
+<div class="form-group">
+<?php echo form_label('Indigenous Employees:', 'indigent', array('class' => 'col-sm-4 control-label')); ?>
+	<div class="col-sm-8">
+		<?php echo form_input(array(
+			'name' => 'indigent',
+			'id' => 'indigent',
+			'value' => '0',
+			'placeholder' => 'Indigenous Employees',
+			'class' => 'form-control'
+		)); ?>
+	</div>
+</div>
+
+
+<div class="col-sm-6">	
+						<div class="form-group">
+							<?php echo form_label('Classification:', 'classification_id', array('class' => 'col-sm-4 control-label')); ?>							
+							<div class="col-sm-8">
+							<span style="color:#F00"><b>*</b></span>
+								<?php echo form_dropdown('classification_id', $classification, '', 'class="form-control"'); ?>
+							</div>
+						</div>						
+					</div> <!-- End of Column -->
+					
+					
+					
+					
+<div class="form-group">
+							<?php echo form_label('Male Employees:', 'male_employee', array('class' => 'col-sm-4 control-label')); ?>
+							<div class="col-sm-8">
+								<?php echo form_input(array(
+									'name' => 'male_employee',
+									'id' => 'male_employee',
+									'value' => '0',
+									'placeholder' => 'Number of Male Employees 0 if None',
+									'class' => 'form-control'
+								)); ?>
+							</div>
+						</div>
+
+						<div class="form-group">
+							<?php echo form_label('Female Employees:', 'female_employee', array('class' => 'col-sm-4 control-label')); ?>
+							<div class="col-sm-8">
+								<?php echo form_input(array(
+									'name' => 'female_employee',
+									'id' => 'female_employee',
+									'value' => '0',
+									'placeholder' => 'Number of Female Employees 0 if None',
+									'class' => 'form-control'
+								)); ?>
+							</div>
+						</div>
+						
+						
+<div class="form-group">
+							<?php echo form_label('PWD Employees:', 'pwde', array('class' => 'col-sm-4 control-label')); ?>
+							<div class="col-sm-8">
+								<?php echo form_input(array(
+									'name' => 'pwde',
+									'id' => 'pwde',
+									'value' => '0',
+									'placeholder' => 'Number of PWD Employees 0 if None',
+									'class' => 'form-control'
+								)); ?>
+							</div>
+						</div>
+						<div class="form-group">
+							<?php echo form_label('LGU Employees:', 'lgu_employee', array('class' => 'col-sm-4 control-label')); ?>
+							<div class="col-sm-8">
+								<?php echo form_input(array(
+									'name' => 'lgu_employee',
+									'id' => 'lgu_employee',
+									'value' => '0',
+									'placeholder' => 'Number of employees residing in LGU 0 if None',
+									'class' => 'form-control'
+								)); ?>
+							</div>
+						</div>

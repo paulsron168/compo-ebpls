@@ -1,0 +1,3310 @@
+(function($) {
+/* $(document).ready(function () { 
+		//$('.search-owner').focus();
+		$('input:text:first:visible').focus();
+});	 */
+
+	$('a:disabled').after(function (e) {
+    d = $("<div>");
+    i = $(this);
+    d.css({
+        height: i.outerHeight(),
+        width: i.outerWidth(),
+        position: "absolute",
+    })
+    d.css(i.offset());
+    d.attr("title", i.attr("title"));
+    d.tooltip();
+    return d;
+	});
+	$('#new-application').on('shown.bs.modal', function () {
+		$('#owner-search').focus();		
+	});
+	
+	
+	$('a.close-modal').on('click', function(e) {
+		e.preventDefault();
+		$('button.close-modal').trigger('click');
+	});
+
+	$('a[data-toggle="tab"]').on('shown.bs.tab', function(e) {
+		var target = $(e.target).attr('href'),
+			tabs = target.split('#');
+
+		switch(tabs[1]) {
+			case 'payment':
+				var table = $(target).find('#business-payment tbody');
+				$.getJSON(baseurl + 'fees/api/payment/approval_list', function(result) {
+					if(result.error === 0) {  
+						table.html('');
+						for(i in result.data) {
+							var tr = $('<tr />').appendTo(table),
+								details = result.data[i];
+
+							$('<td />', { html: '<strong>'+details.permit_number+'</strong>' }).appendTo(tr);
+							$('<td />', { text: capitalize(details.firstname + ' ' + details.middlename + ' ' + details.lastname) }).appendTo(tr);
+							$('<td />', { text: capitalize(details.business_name) }).appendTo(tr);
+							$('<td />', { text: details.application_date }).appendTo(tr);
+							$('<td />', { text: capitalize(details.application_type) }).appendTo(tr);
+							$('<td />', { text: capitalize(details.status) }).appendTo(tr);
+							$('<td />', { 'class': 'text-center', html: '<a href="#"  class="btn btn-info btn-xs selectpayer" data-assessmentid="' + details.assessment_id + '" data-ownerid="' + details.owner_id + '" data-businessid="' + details.buss_id + '"><i class="fa fa-money"></i> Pay</a>' }).appendTo(tr);
+							
+						}
+					} else {
+						table.html('');
+						var tr = $('<tr />').appendTo(table);
+						$('<td />', { text: 'Currently have no pending assessments.', colspan: 7 }).appendTo(tr);
+					}
+				});
+				break;
+			case 'releasing':
+				var table = $(target).find('#for-releasing tbody');
+				$.getJSON(baseurl + 'fees/api/releasing/get', function(result) {
+					if(result.error === 0) {
+						table.html('');
+						for(i in result.data) {
+							var tr = $('<tr />').appendTo(table),
+								details = result.data[i];
+
+							$('<td />', { text: details.permit_number }).appendTo(tr);
+							$('<td />', { text: capitalize(details.firstname + ' ' + details.middlename + ' ' + details.lastname) }).appendTo(tr);
+							$('<td />', { text: capitalize(details.business_name) }).appendTo(tr);
+							//$('<td />', { html: '<a class="btn btn-info btn-xs btn-block print-permit" href="' + baseurl + 'fees/release/' + details.pay_id + '" target="_blank"><i class="fa fa-print"></i> Print Permit</a>' }).appendTo(tr); //pay_id has been changed to assess_id
+							if (details.is_released == 'Y'){
+							$('<td />', { html: '<a class="btn btn-info btn-xs btn-block print-permit"  data-releasingid="' + details.releasing_id + '" href="' + baseurl + 'fees/release/' + details.pay_id + '" disabled="disabled" target="_blank"><i class="fa fa-print"></i> Print Permit</a>' }).appendTo(tr);
+							} else {
+								$('<td />', { html: '<a class="btn btn-info btn-xs btn-block print-permit"  data-releasingid="' + details.releasing_id + '" href="' + baseurl + 'fees/release/' + details.pay_id + '" target="_blank"><i class="fa fa-print"></i> Print Permit</a>' }).appendTo(tr);
+							}
+						}
+						// $(target).find('#for-releasing').initDataTables();
+					} else {
+						table.html('');
+						var tr = $('<tr />').appendTo(table);
+						$('<td />', { text: 'Currently have no pending assessments.', colspan: 7 }).appendTo(tr);
+
+					}
+				});
+				break;
+		}
+
+		$('.dataTables_filter input').prop ('placeholder', 'Search...');
+	});
+	
+	// print permit click and updates status isrealease
+	
+	$('#for-releasing').on('click','a.print-permit',function (e){ 
+	var data = $(this).data();
+		$.ajax({
+			url : baseurl + 'fees/api/releasing/permit_release/' + data.releasingid,
+			type : 'get',
+			dataType: 'json',
+			success : function (result){
+				if (result.error == 0){
+					console.log('Ok');
+					window.reload();
+				} else {
+					console.log('Not Ok');
+				}
+			}
+			
+		});
+	});
+	// $('#for-releasing').on('click', 'a.print-permit', function(e) {
+	// 	e.preventDefault();
+	// 	$('#print-mayor-permit').modal('show');
+	// });
+
+	// setTimeout(function() {
+	// 	$('#business-application').initDataTables();
+	// }, 1000);
+
+	/* --------------
+	 * Search Plugin
+	 * -------------- */
+	$.fn.lookup = function(options) {
+		var defaults = {
+			input: 'input.business-search',
+			type: 'owners',
+			step: 'one'
+		}, o = $.extend(defaults, options);
+
+		return this.each(function() {
+			var ul = $('.form.search').find('.' + o.type + '.search-results');
+
+			$.ajax({
+				url: baseurl + 'fees/api/owner/get/' + o.type + '/' + $(o.input).val(),
+				type: 'get',
+				dataType: 'json',
+				beforeSend: function() {
+					ul.html('');
+					$('<li />', {
+						html: '<small>Searching...</small>'
+					}).appendTo(ul);
+				},
+				success: function(result) {
+					if(result.error === 0) {
+						var results = result.data;
+
+						$('.form.search').show();
+						ul.html('');
+
+						for(i in results) {
+							var dataID = (o.type == 'owners') ? results[i].owner_id : results[i].buss_id,
+								txt = (o.type == 'owners') ? results[i].firstname + ' ' + results[i].middlename + ' ' + results[i].lastname : results[i].business_name;
+
+							$('<li />', {
+								'class': 'relative',
+								html: txt + '<a href="javascript:void(0);" data-txt="' + txt + '" data-id="' + dataID + '" class="btn btn-primary btn-xs absolute pos-right pull-right attach">Attach ></a>'
+							}).appendTo(ul);
+						}
+					} else {
+						ul.html('');
+						$('<li />', { text: result.message }).appendTo(ul);
+					}
+				}
+			});
+		});
+	};
+
+	/* -------------
+	 * Attach Plugin
+	 * ------------- */
+	$.fn.attach = function(option, callback) {
+		var defaults = {
+			id: '',
+			type: 'owners',
+			step: 'one',
+			next: 'two'
+		}, o = $.extend(defaults, option);
+
+		return this.each(function() {
+			var id = (o.id == '') ? $(this).data('id') : o.id,
+				txt = $(this).data('txt'),
+				element = $(this);
+			//alert(o.type);
+			$.getJSON(baseurl + 'fees/api/owner/set/' + o.type + '/' + id, function(result) {
+				if(result.error === 0) {
+					$('.owner.step-' + o.step).fadeOut(function() {
+						$('.owner.step-' + o.next).hide().fadeIn(function() {
+							$.getJSON(baseurl + 'fees/api/owner/get_owner/' + result.data.id, function(owners) {
+								if(owners.error === 0) {
+									$('form.step-' + o.next).find('.' + o.type + '-details p.field-values').text(owners.data.firstname + ' ' + owners.data.lastname);
+									$('form.step-' + o.next).find('input[id="business-search"]').focus();
+								} else {
+									show_message($('form.step-' + o.step).find('.messages'), owners.message, 'Oops!', 'danger');
+								}
+							});
+						});
+					});
+				} else {
+					show_message($('form.step-' + o.step).find('.messages'), result.message, 'Oops!', 'danger');
+				}
+			});
+
+			if(typeof callback == 'function') {
+				callback.call();
+			}
+		});
+	}
+
+	/* ------------
+	 * Div Toggles
+	 * ------------ */
+	$('#add-new-owner').on('click', function() {
+		$('#owner-searches').fadeOut(function() {
+			$('#owner-form').hide().fadeIn();
+			/**set focus*/
+			$(function(){
+				$("#firstname").focus();
+			});
+			/** end of set focus*/
+		});
+	});
+
+	$('input.owner-search').on('focus', function() {
+		$('#owner-form').fadeOut(function() {
+			$('#owner-searches').hide().fadeIn();
+		});
+	});
+
+	$('#add-new-business').on('click', function() {
+		$('#business-searches').fadeOut(function() {
+			$('#business-form').hide().fadeIn();
+			
+			/**set focus*/
+			$(function(){
+				$("#permit_number").focus();
+			});
+			/** end of set focus*/
+		});
+	});
+
+	$('input.business-search').on('focus', function() {
+		$('#business-form').fadeOut(function() {
+			$('#business-searches').hide().fadeIn();
+		});
+	});
+
+	/* -------------------------
+	 * Step One
+	 * Saving New Business Owner
+	 * ------------------------- */
+	$('form.step-one').on('submit', function(e) {
+		e.preventDefault();
+
+		var inputs = $(this).serialize(),
+			form = $(this);
+
+		$.ajax({
+			url: baseurl + 'fees/api/owner/save_owner',
+			type: 'post',
+			dataType: 'json',
+			data: inputs,
+			beforeSend: function() {
+
+			},
+			success: function(result) {
+				if(result.error === 0) {
+					// $('.owner.step-one').fadeOut(function() {
+					// 	$('.owner.step-two').hide().fadeIn();
+					// });
+					$(this).attach({
+						id: result.data.owner_id,
+						type: 'owner',
+						step: 'one',
+						next: 'two'
+					});
+				} else {
+					show_message(form.find('.messages'), result.message, 'Oops!', 'danger');
+				}
+			}
+		});
+	});
+
+	
+	/**-----------------------------------
+	tRY LNG GD
+	*/
+	$('form.step-two').on('change', '.brgy select[name="brgy_id"]', function(e) {
+		var barangay =$(this).find('option:selected').text(),
+			street_address = $(this).parent().parent().parent().find('input[name="street_address"]').val(barangay + 'Balamban, Cebu');
+			//street_address.val(barangay);
+	 alert(barangay);	
+	 
+
+	});
+	/* -----------------------------------
+	 * Step Two
+	 * Saving Owner's Business Information
+	 * ----------------------------------- */
+	$('form.step-two').on('submit', function(e) {
+		e.preventDefault();
+
+		var inputs = $(this).serialize(),
+			form = $(this);
+//alert(inputs);
+		$.post(baseurl + 'fees/api/owner/save_business', inputs, function(result) {
+			if(result.error === 0) {
+				$('.owner.step-two').fadeOut(function() {
+					$('.owner.step-three').hide().fadeIn();
+					//window.reload();
+					$.getJSON(baseurl + 'fees/api/owner/session', function(sessions) {
+				var sess = sessions.data;
+
+				$.getJSON(baseurl + 'fees/api/owner/application/' + sess.owner_id + '/' + sess.buss_id, function(result) {
+					if(result.error === 0) {
+						var app = result.data;
+
+						$('form.step-three').find('.owner-details p.field-values').text(app.firstname + ' ' + app.middlename + ' ' + app.lastname);
+						$('form.step-three').find('.business-details p.field-values').text(app.business_name + ' / ' + app.trade_name);
+						$('form.step-three').find('input[name="application_id"]').val(app.application_id);
+					} else {
+						console.log(result);
+					}
+				});
+			})
+				});
+			} else {
+				show_message(form.find('.messages'), result.data.error, 'Oops!', 'danger');
+			}
+		}, 'json');
+		return false;
+	});
+
+	/* -----------------------------------
+	 * Step Three
+	 * Saving Application Information
+	 * ----------------------------------- */
+	$('form.step-three').on('submit', function(e) {
+		e.preventDefault();
+
+		var inputs = $(this).serialize(),
+			form = $(this);//alert(inputs);
+		
+		$.post(baseurl + 'fees/api/owner/save_application', inputs, function(result) {
+			if(result.error === 0) {
+				$('button.close-modal').trigger('click');
+				location.reload();
+			} else {
+				show_message(form.find('.messages'), result.message, 'Oops!', 'danger');
+			}
+		}, 'json');
+		return false;
+	});
+
+	/* ------------------------------
+	 * Step One search button clicked
+	 * ------------------------------ */
+	$('#search-owner').on('click', function() {
+		$(this).lookup({
+			input: 'input.owner-search',
+			type: 'owners',
+			step: 'one'
+		});
+	});
+
+	/* ------------------------------
+	 * Step One attach clicked
+	 * ------------------------------ */
+	$('.form.search').find('.owners.search-results').on('click', 'li a.attach', function() {
+		$(this).attach({
+			type: 'owner',
+			step: 'one',
+			next: 'two'
+		});
+	});
+
+	/* ------------------------------
+	 * Step Two search button clicked
+	 * ------------------------------ */
+	$('#search-business').on('click', function() {
+		$(this).lookup({
+			input: 'input.business-search',
+			type: 'businessess',
+			id: 'buss',
+			step: 'two'
+		});
+	});
+
+	/* ------------------------------
+	 * Step Two attach clicked
+	 * ------------------------------ */
+	$('.form.search').find('.businessess.search-results').on('click', 'li a.attach', function() { //alert('ana ko dre');
+		$(this).attach({
+			type: 'buss',
+			step: 'two',
+			next: 'three'
+		}, function() {
+			$.getJSON(baseurl + 'fees/api/owner/session', function(sessions) {
+				var sess = sessions.data;
+
+				$.getJSON(baseurl + 'fees/api/owner/application/' + sess.owner_id + '/' + sess.buss_id, function(result) {
+					if(result.error === 0) {
+						var app = result.data;
+//alert(app.application_id);
+						$('form.step-three').find('.owner-details p.field-values').text(app.firstname + ' ' + app.middlename + ' ' + app.lastname);
+						$('form.step-three').find('.business-details p.field-values').text(app.business_name + ' / ' + app.trade_name);
+						$('form.step-three').find('input[name="application_id"]').val(app.application_id);
+					} else {
+						console.log(result);
+					}
+				});
+			})
+		});
+	});
+
+	/* -------------
+	 * Do Assessment
+	 * ------------- */
+	$('#assess').on('click', 'a.assess-now', function(e) {
+		e.preventDefault();
+		var inputs = $('#assess').find('form.assessment').serialize();
+		
+		$.post(baseurl + 'fees/api/payment/assess_now', inputs, function(result) {
+			if(result.error === 0) {
+				$('#assess').find('.messages').append('<div class="alert alert-success fade in" style="margin: 20px;">' +
+					'<a class="close" data-dismiss="alert" href="#" aria-hidden="true">×</a>' +
+					'<p><strong>Success!</strong> ' + result.message + '</p></div>');
+				$('#assess').find('a.assess-now').attr('disabled', true);
+			} else {
+
+			}
+		}, 'json');
+	});
+	
+	
+	/* -------------
+	 * Do Re-Assessment
+	 * ------------- */
+	$('#reassess').on('click', 'a.reassess-now', function(e) {
+		e.preventDefault();
+		var inputs = $('#reassess').find('form.re-assessment').serialize();
+		//alert(inputs);
+		$.post(baseurl + 'fees/api/payment/re_assess_now', inputs, function(result) {
+			if(result.error === 0) {
+				$('#assess').find('.messages').append('<div class="alert alert-success fade in" style="margin: 20px;">' +
+					'<a class="close" data-dismiss="alert" href="#" aria-hidden="true">×</a>' +
+					'<p><strong>Success!</strong> ' + result.message + '</p></div>');
+				$('#assess').find('a.assess-now').attr('disabled', true);
+			} else {
+
+			}
+		}, 'json');
+	});
+	
+	$('button.close-modal').on('click', function (e) {
+		location.reload();
+	});
+	
+	/* -------------
+	 * Show Clear Assessment Requirements
+	 * ------------- */
+	$('#assess').on('click', 'a.clear-requirements', function(e) {
+		e.preventDefault();
+		var ID = $(this).data();
+
+		popup(
+			'Clear all Requirements',
+			'This will clear out the owners requirements',
+			'Are you sure you want to proceed?',
+			{
+				appID: ID.appId,
+				natureID: ID.natureId
+			},
+			'Clear Now',
+			'applications',
+			'warning'
+		);
+	});
+
+	$('#popup-notification').find('.actions a').on('click', function(e) {
+		e.preventDefault();
+		var appID = $('#popup-notification').find('input[name="appID"]').val(),
+			natureID = $('#popup-notification').find('input[name="natureID"]').val(),
+			type = $('#popup-notification').find('input[name="type"]').val();
+
+		if(type == 'applications') {
+			$.getJSON(baseurl + 'fees/api/owner/clear_requirements/' + natureID + '/' + appID, function(result) {
+				console.info(result);
+			});
+		}
+	});
+
+	/* -------------------------------------------------------------
+	 * Populate list of Requirements based on the Nature of Business
+	 * ------------------------------------------------------------- */
+	$('select.business-nature').on('change', function() {
+		var natureID = $(this).val(),
+			list = $('.requirement-list');
+
+		if(!$(this).hasClass('from-table')) {
+			list.requirements({ id: natureID });
+		}
+	});
+
+	/* ----------------------------
+	 * Show Owner Form for Editing
+	 * ---------------------------- */
+	$('table#business-application tbody').on('click', 'a.edit-owner', function(e) {
+		e.preventDefault();
+		var data = $(this).data(),
+			modal = $('#edit-owner-details');
+		modal.modal('show');
+
+		$.ajax({
+			url: baseurl + 'fees/api/owner/get_owner/' + data.ownerid,
+			// alert(data.ownerid);
+			type: 'get',
+			dataType: 'json',
+			beforeSend: function() {
+				modal.find('.loaders').hide().fadeIn();
+			},
+			success: function(result) {
+				// console.log(result.error);
+				if(result.error === 0) {
+					modal.find('.loaders').fadeOut(function() {
+						var owner = result.data;
+
+						modal.find('input[name="owner_id"]').val(data.ownerid);
+						modal.find('input[name="firstname"]').val(owner.firstname);
+						modal.find('input[name="middlename"]').val(owner.middlename);
+						modal.find('input[name="lastname"]').val(owner.lastname);
+						modal.find('textarea').text(owner.address);
+						modal.find('select[name="brgy_id"]').val(owner.brgy_id);
+						modal.find('input[name="contact_number"]').val(owner.contact_number);
+						modal.find('input[name="email"]').val(owner.email);
+					});
+				} else {
+					show_message($('.owner-message'), result.message, 'Oops!', 'danger');
+				}
+			}
+		});
+	});
+
+	$('#edit-form-owner').on('submit', function(e) {
+		e.preventDefault();
+		var inputs = $(this).serialize();
+
+		$.post(baseurl + 'fees/api/owner/save_owner', inputs, function(result) {
+			if(result.error === 0) {
+				show_message($('.owner-message'), result.message, 'Success!', 'success');
+			} else {
+				show_message($('.owner-message'), result.message, 'Oops!', 'danger');
+			}
+			$('#edit-owner-details').find('button.close-modal').trigger('click');
+		}, 'json');
+	});
+
+
+	/*-----------------------------
+	*Show business-form for editing
+	*------------------------------*/
+	$('table#business-application tbody').on('click','a.edit-business', function(e){
+		e.preventDefault();
+		var data = $(this).data(),
+			modal = $('#edit-business-details');
+		
+		modal.modal('show');
+
+		$.ajax({
+			url: baseurl + 'fees/api/owner/get_business/' + data.bussid,
+			type: 'get',
+			dataType: 'json',
+			beforeSend: function() {
+				modal.find('.loaders').hide().fadeIn();
+			},
+			success: function(result) {
+				if(result.error === 0){
+					modal.find('#edit-business-form').fadeIn(function() {
+						modal.find('div.loader').fadeOut();
+
+						var business = result.data;
+						//alert(business.assessment_id);
+						if (business.assessment_id){
+						
+							modal.find('select[name="payment_id"]').val(business.payment_id).attr('disabled',true);
+							modal.find('input[name="registered_date"]').val(business.registered_date).attr('disabled',true);
+						
+						} else {							
+							modal.find('select[name="payment_id"]').val(business.payment_id).attr('disabled',false);
+							modal.find('input[name="registered_date"]').val(business.registered_date).attr('disabled',false);
+							
+						}
+						
+						if(business.govt_incentive == '1'){
+						$('.govt-entity').show();
+						modal.find('input[name="govt_incentive"]').val(data.govt_incentive);
+						}else{
+						$('.govt-entity').hide();
+						}
+						
+						if(business.govt_incentive == '1'){
+						$('.govt-entity').show();
+						modal.find('input[name="govt_incentive"]').val(data.govt_incentive);
+						} else {
+						$('.govt-entity').hide();
+						modal.find('input[name="govt_incentive"]').val('0');
+						}
+						//alert(business.occupancy_id);
+						if(business.occupancy_id == '1'){ 
+						$('.rental_info').show();
+						modal.find('input[name="id"]').val(business.id);
+						modal.find('input[name="rental_fee"]').val(business.rental_fee);
+						modal.find('input[name="leasor_tel_no"]').val(business.leasor_tel_no);
+						modal.find('input[name="leasor_first_name"]').val(business.leasor_first_name);
+						modal.find('input[name="leasor_middle_name"]').val(business.leasor_middle_name);
+						modal.find('input[name="leasor_last_name"]').val(business.leasor_last_name);
+						modal.find('input[name="r_house_no"]').val(business.r_house_no);
+						modal.find('select[name="r_brgy_id"]').val(business.r_brgy_id);
+						modal.find('input[name="subdi"]').val(business.subdi);
+						modal.find('input[name="city_muni"]').val(business.city_muni);
+						modal.find('input[name="province"]').val(business.province);
+						modal.find('input[name="email_add"]').val(business.email_add);
+						modal.find('input[name="emergency_info"]').val(business.emergency_info);
+						} else {
+						$('.rental_info').hide();
+						} //alert(business.owner_id);
+							modal.find('input[name="buss_id"]').val(data.bussid);
+							modal.find('input[name="r_buss_id"]').val(business.r_buss_id);
+							modal.find('input[name="owner_id"]').val(business.owner_id);
+							modal.find('input[name="reference_no"]').val(data.reference_no);
+							modal.find('input[name="house_no"]').val(data.house_no);
+							modal.find('input[name="unit_no"]').val(data.unit_no);
+							modal.find('input[name="bldg_name"]').val(data.bldg_name);
+							modal.find('input[name="subdivision"]').val(data.subdivision);
+							modal.find('input[name="city"]').val(data.city);							
+							modal.find('input[name="province"]').val(data.province);
+							modal.find('input[name="house_no"]').val(data.house_no);
+							modal.find('input[name="permit_number"]').val(business.permit_number);
+							modal.find('select[name="application_id"]').val(business.application_id);
+							modal.find('select[name="ownership_id"]').val(business.ownership_id);
+							modal.find('select[name="classification_id"]').val(business.classification_id);
+							modal.find('select[name="occupancy_id"]').val(business.occupancy_id);						
+							modal.find('select[name="brgy_id"]').val(business.brgy_id);
+							modal.find('input[name="business_name"]').val(business.business_name);
+							modal.find('input[name="trade_name"]').val(business.trade_name);
+							modal.find('input[name="business_area"]').val(business.business_area);							
+							modal.find('input[name="contact_number"]').val(business.contact_number);
+							modal.find('input[name="email"]').val(business.email);
+							modal.find('input[name="registrar_number"]').val(business.registrar_number);						
+							modal.find('input[name="ctc"]').val(business.ctc);
+							modal.find('input[name="tin"]').val(business.tin);
+							modal.find('input[name="pin"]').val(business.pin);
+							modal.find('input[name="abled_female_emp"]').val(business.abled_female_emp);
+							modal.find('input[name="abled_male_emp"]').val(business.abled_male_emp);
+							modal.find('input[name="disable_male_emp"]').val(business.disable_male_emp);
+							modal.find('input[name="disable_female_emp"]').val(business.disable_female_emp);
+							modal.find('input[name="indi_male_emp"]').val(business.indi_male_emp);
+							modal.find('input[name="indi_female_emp"]').val(business.indi_female_emp);
+							modal.find('input[name="lgu_male_emp"]').val(business.lgu_male_emp);
+							modal.find('input[name="lgu_female_emp"]').val(business.lgu_female_emp);
+							modal.find('input[name="pwd_male_emp"]').val(business.pwd_male_emp);
+							modal.find('input[name="pwd_female_emp"]').val(business.pwd_female_emp);
+							//modal.find('input[name="created_at"]').val(business.pin);
+							modal.find('textarea[name="street_address"]').text(business.street_address);
+							
+							//rental
+							
+					});
+				} else {
+					show_message($('.owner-message'), result.message, 'Oops!', 'danger');
+				}
+			}
+		});
+	});
+
+
+	/* ---------------
+	 * Execute Payment
+	 * --------------- */
+	$('#form-cash').on('submit', function(e) {
+		e.preventDefault();
+		var form = $('#form-cash'),
+			inputs = $('#form-cash').serialize();
+			modal = $('#payment_ok');
+
+		
+	//alert(inputs);
+		console.info('Saving...');
+		$.post(baseurl + 'fees/api/payment/save_payment', inputs, function(result) {
+			if(result.error === 0) {
+			//$('button.close-modal').trigger('click');
+			//modal.modal('show');
+			//alert('ja');
+				console.info('Successfully saved');
+				popup(
+					'Transaction',
+					'Payment Successfull',
+					'',
+					{},
+					'Ok',
+					'info',
+					'warning'
+				);
+				window.reload();
+				var table = $('#business-payment tbody');
+
+				$.getJSON(baseurl + 'fees/api/payment/approval_list', function(result) {
+					if(result.error === 0) {
+						table.html('');
+
+						for(i in result.data) {
+							var tr = $('<tr />').appendTo(table),
+								details = result.data[i];
+
+							$('<td />', { text: details.permit_number }).appendTo(tr);
+							$('<td />', { text: capitalize(details.firstname + ' ' + details.middlename + ' ' + details.lastname) }).appendTo(tr);
+							$('<td />', { text: capitalize(details.business_name) }).appendTo(tr);
+							$('<td />', { text: details.application_date }).appendTo(tr);
+							$('<td />', { text: capitalize(details.application_type) }).appendTo(tr);
+							$('<td />', { text: capitalize(details.status) }).appendTo(tr);
+							$('<td />', { 'class': 'text-center', html: '<a href="#" class="btn btn-info btn-xs selectpayer" data-assessmentid="' + details.assessment_id + '" data-ownerid="' + details.owner_id + '" data-businessid="' + details.buss_id + '"><i class="fa fa-money"></i> Pay</a>' }).appendTo(tr);
+						}
+					} else {
+						var tr = $('<tr />').appendTo(table);
+						$('<td />', { text: 'Currently have no pending assessments.', colspan: 7 }).appendTo(tr);
+					}
+				});
+			} else {
+				console.info('Failed Saving');
+			}
+			return false;
+		}, 'json');
+	});
+
+	$('#edit-form-business').on('submit', function(e) {
+		e.preventDefault();
+		var inputs = $(this).serialize();        
+		$.post(baseurl + 'fees/api/owner/save_business', inputs, function(result) {
+			if(result.error === 0) {
+				show_message($('.owner-message'), 'Business updated successfully', 'Success!', 'success');
+				$('button.close-modal').trigger('click');
+				location.reload();
+			} else {
+				show_message($('.owner-message'), result.message, 'Oops!', 'danger');
+			}
+			//$('#edit-business-details').find('button.close-modal').trigger('click');
+		}, 'json');
+	});
+
+	$('#add-business-lines').on('submit', function(e) {
+		e.preventDefault();
+
+		var inputs = $(this).serialize(),
+			form = $(this);
+
+		$.post(baseurl + 'fees/api/owner/save_application', inputs, function(result) {
+			if(result.error === 0) {
+				$('button.close-modal').trigger('click');
+			} else {
+				show_message(form.find('.messages'), result.message, 'Oops!', 'danger');
+			}
+		}, 'json');
+		return false;
+	});
+
+	/* --------------------
+	 * Edit Business Nature
+	 * -------------------- */
+	$('table#business-application tbody').on('click','a.edit-application', function(e){
+		e.preventDefault();
+
+		var data = $(this).data(),
+			modal = $('#edit-business-nature');
+
+		modal.modal('show');
+		$('.new_app').show();
+		$('.capital_header').show();
+		$('.date_application').show();
+		$('.action_header').show();
+		$('.enter_gross').hide();
+		$('#nature-list tbody').business_nature({
+			appid: data.appid,
+			businessid: data.businessid,
+			modal: modal
+		});
+	});
+	
+	
+	/* -------------
+	 * Save Renewal
+	 * ------------- */
+	$('form.renew').on('submit', function(e) {
+		e.preventDefault();
+		var inputs = $(this).serialize();
+		
+		$.post(baseurl + 'fees/api/owner/save_renew', inputs, function(result) {
+			if(result.error === 0) {
+				location.reload();
+			} else {
+				
+			}
+		}, 'json');
+	});
+	
+	/*--------------------
+	 * Renew Modal baby!!
+	 *--------------------*/
+	 
+	$('table#business-application tbody').on('click','a.renew', function(e){
+		e.preventDefault();
+		
+		var d  = $(this).data(),
+			modal = $('#renew');
+			
+		modal.modal('show');
+		
+		$.ajax({
+			url: baseurl + 'fees/api/owner/get_taxpayer_info/' + d.ownerid + '/' + d.businessid + '/' + d.appid ,
+			type: 'post',
+			dataType: 'json',			
+			beforeSend: function() {
+
+			},
+			success: function(result) {
+				if(result.error === 0) {
+					var modal = $('#renew'),
+						list = $('.requirement-list');
+						list.html('');
+						details = result.data.taxpayer_info,
+						data = result.data.taxpayer;
+					//alert(result.data.taxpayer_info[0].firstname);
+					
+					modal.find('span.owner').text(details[0].firstname + ' ' + details[0].middlename + '. ' + details[0].lastname);
+					modal.find('span.business').text(details[0].business_name);
+					modal.find('span.payment').text(capitalize(details[0].types));
+					modal.find('span.address').text(details[0].street_address);
+					//modal.find('span.capital').text( (details[0].capital == '') ? '0.00' :  ''+currencyFormat(parseFloat(details[0].capital)));
+					//modal.find('span.gross').text( (details[0].gross =='') ? '0.00' : ''+currencyFormat(parseFloat(details[0].gross)));
+					
+					var chunk = array_chunk(result.data.addtional_reqt, 5);
+					
+					for(col in chunk) {
+						var cols = $('<div />', { 'class': 'col-sm-12' }).appendTo(list);
+						for(i in chunk[col]) {
+							var data = chunk[col][i];
+							console.log(data);
+							var label = $('<label />', {
+									'class': 'checkbox-inline col-sm-12', text: data.add_reqt_type
+								}).appendTo(cols),
+								checkbox = $('<input />', {
+									type: 'checkbox',
+									'class': 'checkbox-item',
+									name: 'requirements[]',
+									value: data.add_reqt_id
+								}).appendTo(label);
+						}
+					}
+
+					$('<input />', {
+						type: 'hidden', name: 'app_id', value: d.appid
+					}).appendTo(modal.find('.hidden-fields'));
+					
+					modal.find('.business-nature-gross').html('');
+					for(bn in result.data.taxpayer_info) {
+						var tdate = new Date(), tdate = tdate.getFullYear()
+						var gross = result.data.taxpayer_info[bn],
+							gr = modal.find('.business-nature-gross');
+						
+						$('<div class="form-group">' +
+								'<label class="control-label col-sm-6">Gross for <span class="business-nature">' + gross.business_nature + '</span>&nbsp;<span class="year">'+tdate+'</span></label>' +
+								'<div class="col-sm-6">' +
+									'<input type="text" name="gross[]" class="form-control" />' +
+								'</div>' +
+							'</div>').appendTo(gr);
+						
+						$('<input />', {
+							type: 'hidden', name: 'natureid[]', value: gross.buss_nature_id
+						}).appendTo(modal.find('.hidden-fields'));
+					}
+					
+				} else {
+					// Display Error
+				}
+			}
+		});
+	}); 
+	 
+	$("#checkAll").change(function () { alert('jiji');
+		$("input:checkbox").prop('checked', $(this).prop("checked"));
+	});
+	$('#nature-list tbody').on('click', 'a.edit-nature', function(e) {
+		e.preventDefault();
+		var data = $(this).data(),
+			tr = $(this).parent().parent(),
+			td = $(this).parent(),
+			a = $(this);
+
+		tr.find('td span.nature').fadeOut(function() {
+			var nature = $('#nature-list tbody').parent().parent().find('select.business-nature'),
+				nature_container = $(this).parent();
+
+			/* $(this).removeClass('btn-warning').addClass('btn-success');
+			$(this).addClass('save-ready');
+			$(this).html('<i class="fa"></i> Save'); */
+			if($(this).hasClass('btn-warning')) {
+
+			} else {
+				nature_container.find('select').remove();
+
+				// Change the Edit button into save button
+				a.removeClass('edit-nature')
+				.removeClass('btn-warning')
+				.addClass('save-ready')
+				.addClass('btn-success')
+				.attr('title', 'Save');
+
+				nature.clone(true).addClass('from-table')
+				.addClass('margin-top-10-n')
+				.val(data.natureid).appendTo(nature_container);
+				
+				tr.find('td input.capital').prop('readonly', false);
+				tr.find('td input.application_date').prop('readonly', false);
+			}
+		});
+	});
+
+	$('#nature-list tbody').on('click', 'a.save-ready', function(e) {
+	//$('#add-business-lines').on('submit', function(e) {
+		e.preventDefault();
+		
+		var requirements = [];
+			$('.checkbox-item:checked').each(function (){ requirements.push($(this).val()); });
+		var data = $(this).data(),
+			tr = $(this).parent().parent(),			
+			cancel = $(this).parent().find('a.delete-nature'),
+			application_date = tr.find('input[name="application_date"]').val(),
+			app_id = tr.find('input[name="app_id"]').val(),
+			capital = tr.find('input[name="capital"]').val(),
+			buss_id = tr.find('input[name="buss_id"]').val(),
+			gross = tr.find('input[name="gross"]').val(),
+			nature = tr.find('select').val(),
+			modified = 1,
+			requirements = $.unique(requirements);			
+			capital = capital.replace(/\,/g,'');
+			//alert(capital);
+		// console.log(data); return false;
+		
+		$.ajax({
+			url: baseurl + 'fees/api/owner/update_business_line',
+			type: 'post',
+			dataType: 'json',
+			data: {
+				bus_line_id: data.buslineid,
+				app_id: app_id,
+				application_date : application_date,
+				buss_id : buss_id,
+				buss_nature_id: nature,
+				modified:modified,
+				gross : gross,
+				capital: parseFloat(capital),
+				requirements : requirements
+			},
+			beforeSend: function() {
+
+			},
+			success: function(result) {
+				if(result.error === 0) {
+					var modal = $('#edit-business-nature');
+					$('button.close-modal').trigger('click');
+					location.reload();
+					/* $('#edit-business-nature').on('click',function (e) {
+						location.reload();
+						alert('ja');
+					});		 */		
+					 $('#nature-list tbody').business_nature({
+						appid: data.appid,
+						businessid: data.businessid,
+						modal: modal
+					});
+				} else {
+					//Display Error
+				}
+			}
+		});
+	});
+
+	$('#edit-business-nature').on('click', 'a.add-nature', function(e) {
+		e.preventDefault();
+		var data = $(this).data(),
+			inputs = $('#add-business-lines').serialize(),
+			modal = $('#edit-business-nature');
+			// nature = $('select.business-nature').val(),
+			// capital = $('input.add-capital').val(),
+			// requirements = $('input[type="checkbox"]').val();
+
+		$.ajax({
+			url: baseurl + 'fees/api/owner/add_business_line',
+			type: 'post',
+			dataType: 'json',
+			data: inputs + '&app_id=' + data.appid + '&buss_id=' + data.businessid,
+			// {
+			// 	app_id: data.appid,
+			// 	buss_id: data.businessid,
+			// 	buss_nature_id: nature,
+			// 	capital: capital
+			// 	// requirements:
+			// },
+			beforeSend: function() {},
+			success: function(result) {
+				if(result.error === 0) {
+					// $.post(baseurl + 'fees/api/owner/update_application', inputs + '&app_id=' + data.appid, function(response) {
+					// 	console.log(response);
+					// });
+					$('#nature-list tbody').business_nature({
+						appid: data.appid,
+						modal: modal
+					});
+				} else {
+					// Error here
+				}
+			}
+		});
+
+	});
+	// Populate business nature table list
+	$.fn.business_nature = function(option) {
+		var defaults = {
+			appid: 0,
+			businessid: 0,
+			modal: ''
+		}, o = $.extend(defaults, option);
+
+		return this.each(function() {
+			var table = $(this);
+
+			o.modal.find('a.add-nature').attr('data-appid', o.appid);
+			o.modal.find('a.add-nature').attr('data-businessid', o.businessid);
+
+			$.ajax({
+				url: baseurl + 'fees/api/owner/get_business_nature/' + o.appid,
+				type: 'get',
+				dataType: 'json',
+				beforeSend: function() {
+					o.modal.find('.loader').hide().fadeIn();
+				},
+				success: function(result) {
+					if(result.error === 0) {
+						var data = result.data,							
+							list = $('.requirement-list');
+						table.html('');
+						
+						o.modal.find('.loader').fadeOut(function() {
+							for(i in result.data.nature) { 
+								var data = result.data.nature[i],
+									natureID = data.buss_nature_id,
+									tr = $('<tr />').appendTo(table);
+								  
+								$('<td />', { 'class': 'td-center-vert', html: '<span class="nature">' + data.business_nature + '</span>' }).appendTo(tr);
+								$('<td />', {
+									html: '<div class="form-group">' +
+											'<div class="col-sm-8 input-group">' +
+												'<span class="input-group-addon">₱</span>' +
+												'<input type="text" class="form-control capital" readonly name="capital" value="' + currencyFormat(parseFloat(data.capital)) + '" />' +
+												'<input type="hidden" class="form-control gross" name="gross" value="' + currencyFormat(parseFloat(data.gross)) + '" />' +
+												'<input type="hidden" class="form-control app_id" name="app_id" value="' + data.app_id + '" />' +
+												'<input type="hidden" class="form-control bl_buss_id" name="bl_buss_id" value="' + data.bl_buss_id + '" />' +
+												'<input type="hidden" class="form-control modified" name="modified" value="' + data.modified + '" />' +
+											'</div>' +
+										'</div>' }).appendTo(tr);	
+								$('<td />', { html: '<input type="text" class="form-control application_date" readonly name="application_date" id="application_date" value ="'+data.application_date+'"/>'}).appendTo(tr);
+								$('<td />', {
+									'class': 'text-center',
+									html: '<a title="Edit Business Nature"' +
+										'data-businessid="' + o.businessid +
+										// '" data-ownerid="' + o.ownerid +
+										'" data-buslineid="' + data.bus_line_id +
+										'" data-natureid="' + data.buss_nature_id +
+										'" data-appid="' + data.app_id +										
+										'" class="btn btn-warning btn-xs edit-nature"' +
+										'href="#"><i class="fa fa-edit"></i> ' +
+										'</a> <a title="Delete" data-natureid="' +
+											data.buss_nature_id + '" data-appid="' + data.app_id +
+											'" class="btn btn-danger btn-xs delete-nature" href="#">' +
+											'<i class="fa fa-times-circle"></i></a>'
+								}).appendTo(tr);								
+								/*requirements*/								
+
+									if(!$(this).hasClass('from-table')) {
+										list.requirements_edit({ id: natureID });
+									}
+								/*end of requirements*/
+							}
+							
+						});
+					} else {
+						show_message($('.owner-message'), result.message, 'Oops!', 'danger');
+					}
+				}
+			});
+		});
+	}
+	
+	// $('#edit-business-nature').on('submit', function(e) {
+	// 	e.preventDefault();
+	// 	var inputs = $(this).serialize();
+	// });
+
+	$.fn.requirements = function(option) {
+		var defaults = {
+			id: ''
+		}, o = $.extend(defaults, option);
+		return this.each(function() {
+			var list = $(this);
+			list.html('');
+
+			$.getJSON(baseurl + 'fees/api/payment/get_requirements/' + o.id, function(response) {
+				if(response.error === 0) {
+					//for(col in array_chunk(response.data.requirements, 3)) {
+						var cols = $('<div />', { 'class': 'col-sm-6' }).appendTo(list);
+						for(i in response.data.requirements) {
+							var data = response.data.requirements[i],
+								label = $('<label />', {
+									'class': 'checkbox-inline col-sm-12'
+								}).appendTo(cols),
+								checkbox = $('<input />', {
+									type: 'checkbox',
+									'class': 'checkbox-item',
+									name: 'requirements[]',
+									value: data.requirement_id
+								}).appendTo(label);
+							$('<span />', {
+								text: data.description
+							}).appendTo(label);							
+						}
+					//}						
+				} else {
+					// Error here
+					$('<p />', { text: response.message }).appendTo(list);
+				}
+			});
+		});
+	};
+	
+	/*plug in requirements for edit application*/
+	$.fn.requirements_edit = function(option) {
+		var defaults = {
+			id: ''
+		}, o = $.extend(defaults, option);
+		return this.each(function() {
+			var list = $(this);
+			list.html('');
+
+			$.getJSON(baseurl + 'fees/api/payment/get_requirements/' + o.id, function(response) {
+				if(response.error === 0) {
+					//for(col in array_chunk(response.data.requirements, 3)) {
+						var cols = $('<div />', { 'class': 'col-sm-6' }).appendTo(list);
+						for(i in response.data.requirements) {
+							var data = response.data.requirements[i],
+								label = $('<label />', {
+									'class': 'checkbox-inline col-sm-12'
+								}).appendTo(cols),
+								checkbox = $('<input />', {
+									type: 'checkbox',
+									'class': 'checkbox-item',
+									'checked' : 'checked',
+									name: 'requirements[]',
+									value: data.requirement_id
+								}).appendTo(label);
+							$('<span />', {
+								text: data.description +'dfafs'
+							}).appendTo(label);
+						}
+					//}						
+				} else {
+					// Error here
+					$('<p />', { text: response.message }).appendTo(list);
+				}
+			});
+		});
+	};
+	/*end of plugin*/
+	/* --------------------
+	 * Show Range Values
+	 * -------------------- */
+	$('#assess').on('click', 'p.show-range', function() {
+		$(this).parent().find('.slide-range').slideToggle('slow');
+	});
+
+	/* --------------------
+	 * Show Range Values
+	 * -------------------- */
+	$('#reassess').on('click', 'p.show-range', function() {
+		$(this).parent().find('.slide-range').slideToggle('slow');
+	});
+	
+	/*----------------
+	 * Show Assessment form
+ 	 *------------------*/
+ 	$('table#assess tbody').on('click', 'a.assess', function(e){
+ 	 	e.preventDefault();
+ 	 	var data = $(this).data(),value1 = '',
+ 	 		modal = $('#assess');
+
+ 	 	//modal.modal('show');
+
+ 	 	$.ajax({
+ 	 		url: baseurl + 'fees/api/owner/assess/' + data.appid,
+ 	 		type: 'get',
+ 	 		dataType: 'json',
+ 	 		/* beforeSend: function() {
+ 	 			modal.find();
+ 	 		}, */
+ 	 		success: function(result) {
+ 	 			if(result.error === 0) {
+ 	 				var details = result.data.business,
+						recent_year = new Date(),
+						recent_year = recent_year.getFullYear(),
+						buss_app_date = new Date(result.data.business[0].application_date),
+						assessment_year = new Date(result.data.business[0].assessment_date),
+						assessment_year = assessment_year.getFullYear(),
+						buss_app_date = buss_app_date.getFullYear();
+						due = result.data.due_date,
+ 	 					form = $('#assess'),
+						breakdowns = [],
+						breakdownsJSON = "",						
+ 	 					subtotal = 0, total = 0;
+ 	 					table = form.find('table tbody');
+					
+					if ( (recent_year != buss_app_date) && (recent_year != assessment_year && assessment_year != '1970')) {
+					    //if (recent_year != assessment_year && assessment_year == '1970'){ alert('!= 1970');
+							var diff = ((recent_year - buss_app_date) - 1),assess_years = [],
+								yr = $.parseJSON(result.data.assessment_years);
+							console.log('((recent_year - buss_app_date) - 1) = ' + diff);
+							//yr = yr.join
+							
+							modal.modal('hide');
+							new_modal = $('#error');							
+							new_modal.modal('show');
+							
+							new_modal.find('input[name="application_id"]').val(details[0].app_id);
+							new_modal.find('input[name="business_id"]').val(details[0].buss_id);
+							new_modal.find('input[name="buss_nature_id"]').val(details[0].buss_nature_id);
+							new_modal.find('input[name="bus_line_id"]').val(details[0].bus_line_id);
+							
+								for (var i=0; (i<yr.length -1); i++){							
+									$('.hidden_info').append('<input type="hidden" name=year['+[i]+'] value ="'+yr[i]+'">');
+									assess_years.push(yr[i]);
+								}
+							new_modal.find('p.msg').text('You have not renewed for the last '+assess_years.join()+'. Click OK to enter gross sales').css({'font-weight':'bold'});
+						//}
+					}  /* else if (recent_year != assessment_year) {
+						alert('else if');
+					} */
+					else { //alert('ataka bai'); 
+					modal.modal('show');
+ 	 				form.find('.header-detail span.owner').text(capitalize(details[0].firstname + ' ' + details[0].middlename + ' ' + details[0].lastname));
+ 	 				form.find('.header-detail span.business').text(capitalize(details[0].business_name));
+ 	 				form.find('.header-detail span.payment').text(capitalize(details[0].payment_type));
+
+ 	 				$('div.row.quarterly').hide();
+ 	 				var business_natures = $('.business-natures'),
+ 	 					clone = $('.clones .clone').clone();
+
+ 	 				var qtfo = 0, pquarter = 0, // Quarterly TFO
+ 	 					atfo = 0, annually = 0, // Annually TFO
+						btfo = 0, biannual = 0; //Bi annually
+						tax  = 0;
+					
+					var dues = new Array();
+						
+ 	 				business_natures.html('');
+				
+					//Get due date
+					/* for (var j in due){
+						dues.push(due[j].value);
+						console.log(due[j].value);
+					} */
+					//Check if business has back tax but no computation yet
+					/* if (result.data.renewed === 0) {
+						$('.owner.step-two').fadeOut(function() {
+							alert('Business has not yet renewed for a year. Please enter your gross first');						
+							$('.owner.step-three').hide().fadeIn();
+							$('.owner.step-three').find('owner-details').text(result.business[0].firstname);
+							$('.owner.step-three').find('owner-details').text(result.business[0].lastname);
+						});
+					} else { */
+						for(var i in details) { 
+							var tdate = new Date(), tdate = tdate.getFullYear(),
+								n=0,tfo_amount = 0,
+								buss_app_date = new Date(details[i].application_date),
+								buss_app_date = buss_app_date.getFullYear();
+								$C = 0, gr = $.parseJSON(details[i].gross),payment_mode=details[i].payment_id;								
+								console.log('haha '+$.isEmptyObject(gr));
+					
+								if($.isEmptyObject(gr)) {
+									$C = parseFloat(details[i].gross);
+									console.log('Capital: ' + details[i].capital);
+								} else {
+									for(y in gr) {
+										if(gr[y].year == tdate) {
+											$C = gr[y].gross;
+											
+										} else {
+											$C = gr[y].gross;
+										}
+									}
+								}
+								clone.clone(true).find('.business-detail').each(function() {
+									$(this).find('span.nature').text(capitalize(details[i].business_nature));
+									$(this).find('span.address').text(capitalize(details[i].street_address));
+									$(this).find('span.capital').text(currencyFormat(parseFloat($C)));
+								}).end()
+								.find('table').each(function() {
+									var tbl = $(this).find('tbody'),
+										msg = $(this).parent().find('.messages'),
+										subtotal = 0;
+									tbl.html('');
+									var assess_btn = result.data.ignore[0];
+									
+									for(indx in result.data.tfos[i]) {
+										var fees = result.data.tfos[i][indx],									
+											tr = $('<tr />').appendTo(tbl),
+											value = '', gross = 0,subtotal_tfo = 0;
+										
+										if(result.data.required.length > 0) {
+											form.find('a.approve-now').attr('disabled', true);
+											form.find('a.clear-requirements').attr('disabled', false);
+											show_message(msg, 'Missing requirement: \r\n<strong>' + result.data.required[i].join(', ') + '</strong>', 'Warning!', 'danger');
+										} else {
+											form.find('a.approve-now').attr('disabled', false);
+											form.find('a.clear-requirements').attr('disabled', true);
+										}
+										
+										//if(result.data.ignore[i][indx] === true) {
+										if(result.data.ignore[i][0] === true) {
+											form.find('a.assess-now').attr('disabled', true);
+											show_message(msg, 'This Business is already assessed. Please proceed to Payment.', 'Information!', 'info');
+										} else {											
+											form.find('a.assess-now').attr('disabled', false);
+										}
+										
+										if(fees.type == 1) { // Formula
+										
+											var variables = $.parseJSON(fees.variables),
+												formula = fees.value;
+											
+											extract(variables);
+
+											var amt = eval(formula); //parseFloat(eval(formula));
+											subtotal = parseFloat(amt);
+											if(details[i].payment_id == 1) {		// Business paymentmode is Annually			
+													//alert('jhahah');
+													
+													value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>'+ '(' + fees.value + ')' + ' ' + currencyFormat(parseFloat(amt)) + '</strong></span>';												
+													
+														atfo = subtotal;
+														annually = annually + atfo;	
+														console.log('Formula Annual Formula: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);	
+														tfo_amount	+= annually;
+														
+											} else if(details[i].payment_id == 2) {		// Business paymentmode is Semi-Annual										
+												//if(fees.payment_id == 1) {
+												
+													value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + '(' + fees.value + ')' +' ' + currencyFormat(parseFloat(amt)) + '</strong></span>';												
+													
+														if (fees.tfo_type == 1){
+															btfo = amt / 2;											
+															biannual = biannual + btfo;														
+															console.log('Formula Bi-Annual: ' + btfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + biannual);
+														} else {
+															btfo = subtotal;											
+															biannual = biannual + btfo;														
+															console.log('Formula Bi-Annual: ' + btfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);
+														} //alert('tfo_amount sa formula'+tfo_amount);
+												tfo_amount	+= biannual;
+											} else if(details[i].payment_id == 3) {		// Business paymentmode is Quarterly
+												//if(fees.payment_id == 1) {											
+													value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';											
+													
+													if (fees.tfo_type == 1){
+															qtfo = subtotal / 4;											
+															pquarter = pquarter + qtfo;														
+															console.log('Formula Quarterly: ' + qtfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Quarterly Total: ' + pquarter);
+													} else {
+														qtfo = subtotal;											
+														pquarter = pquarter + qtfo;													
+														console.log('Formula Quarterlyfd: ' + qtfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Quarterly Total: ' + pquarter);
+													}
+												tfo_amount += pquarter;												
+											}
+										
+										} else if(fees.type == 2) { // TFO is of Constant type
+											if(details[i].payment_id == 1) { // Business paymentmode is Annually
+											subtotal = parseFloat(fees.value);
+												//if(fees.payment_id == 1) {	// TFO paymentmode is Annual
+												//alert('TFO paymentmode is Annual');
+													value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+													
+													atfo = subtotal;
+													annually = annually + atfo; 												
+													tfo_amount += annually;
+												//}												
+											} else if(details[i].payment_id == 2) {		//Business paymentmode is Semi-Annual /*ari dri tan aw dae*/	
+												if(fees.payment_id == 1) {	// TFO paymentmode is Annual
+												//alert('TFO paymentmode is Annual');
+												subtotal = parseFloat(fees.value);
+													value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+													subtotal = parseFloat(fees.value);
+													atfo = subtotal;
+													annually = annually + atfo; 
+													tfo_amount += annually; 
+												} else if(fees.payment_id == 2) { //TFO paymentmode is Bi-Annual
+												//alert('TFO paymentmode is Bi-Annual');
+													value = '<span class="pull-left label label-warning">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														if (fees.tfo_type == 1){
+															atfo = amt / 2;											
+															biannual = biannual + atfo;										
+															console.log('Formula Bi-Annual: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + biannual);
+														} else {
+															atfo = subtotal;											
+															biannual = biannual + atfo;										
+															console.log('Formula Bi-Annual: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);
+														}
+													tfo_amount += biannual; 
+												}	
+											} else if(details[i].payment_id == 3) {		//Business paymentmode is of Quarterly	
+												//alert('Constant / Quarterly');
+												
+												if(fees.payment_id == 1) {	// TFO paymentmode is Annual
+												//alert('TFO paymentmode is Annual');
+													value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+													subtotal = parseFloat(fees.value);
+													atfo = subtotal;
+													annually = annually + atfo; 												
+													tfo_amount += pquarter; 
+												} else if (fees.payment_id == 3) { //TFO paymentmode is Quarterly
+												//alert('TFO paymentmode is Quarterly');
+													value = '<span class="pull-left label label-warning">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														if (fees.tfo_type == 1){
+															subtotal = parseFloat(fees.value);
+															qtfo = subtotal / 4;											
+															pquarter = pquarter + atfo;										
+															console.log('Formula Quarterly: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Quarterly Total: ' + biannual);
+														} else {
+															subtotal = parseFloat(fees.value);
+															qtfo = subtotal;
+															pquarter = pquarter + atfo;										
+															console.log('Formula Quarterly: fdaf' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Quarterly Total: ' + pquarter);
+														}
+													tfo_amount += pquarter; 
+												}											
+											} //alert(subtotal); 
+										} else if(fees.type == 3) {		// Range								
+											if(details[i].payment_id == 1) {			// Annually	ang business								
+												if(fees.payment_id == 1) {				// Annually ang tfo										
+													values = $.parseJSON(fees.value);
+													value = '<div class="range-list">' +
+														'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+														'<div class="slide-range" style="display: none;">';
+													
+													for(index in values) {
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+														var cp = parseFloat(details[i].capital),
+															min = parseFloat(values[index].min),
+															max = parseFloat(values[index].max);
+														//alert(cp);
+														// console.info(cp + ' >=' + min + ' = ');
+														// console.info(cp >= min);
+														// console.log('-------------------------------')
+														// console.info(cp + ' <=' + max + ' = ');
+														// console.info(cp <= max);
+														if(cp >= min && cp <= max) { 
+															subtotal = parseFloat(values[index].value);
+															atfo = subtotal;
+															// console.log(atfo);
+														}else {
+															subtotal = 0;
+															atfo = 0;													
+														}
+													}
+													 
+													value += '</div></div>';
+													annually = annually + atfo;
+													// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Annual Payment for ' + fees.tfo);
+												} else if (fees.payment_id == 2){ //Bi-annuall ang tfo
+												//alert('Bi-annuall ang tfo');
+													values = $.parseJSON(fees.value);
+													value = '<div class="range-list">' +
+														'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+														'<div class="slide-range" style="display: none;">';
+													
+													for(index in values) {
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+														var cp = parseFloat(details[i].capital),
+															min = parseFloat(values[index].min),
+															max = parseFloat(values[index].max);
+														//alert(cp);
+														// console.info(cp + ' >=' + min + ' = ');
+														// console.info(cp >= min);
+														// console.log('-------------------------------')
+														// console.info(cp + ' <=' + max + ' = ');
+														// console.info(cp <= max);
+														if(cp >= min && cp <= max) { 
+															subtotal = parseFloat(values[index].value);
+															btfo = subtotal / 2;
+															// console.log(atfo);
+														}else {
+															subtotal = 0;
+															btfo = 0;													
+														}
+													}
+													 
+													value += '</div></div>';
+													//annually = annually + atfo;
+													biannual = biannual + btfo;
+												}
+											} else if(details[i].payment_id == 2) {		// Semi-Annual ang business
+											//alert('bi -annual');
+												if(fees.payment_id == 1) {// alert('annual tfo');
+													values = $.parseJSON(fees.value);
+													value = '<div class="range-list">' +
+														'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+														'<div class="slide-range" style="display: none;">';
+													
+													for(index in values) {
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+														var cp = parseFloat(details[i].capital),
+															min = parseFloat(values[index].min),
+															max = parseFloat(values[index].max);
+														//alert(cp);
+														// console.info(cp + ' >=' + min + ' = ');
+														// console.info(cp >= min);
+														// console.log('-------------------------------')
+														// console.info(cp + ' <=' + max + ' = ');
+														// console.info(cp <= max);
+														if(cp >= min && cp <= max) { 
+															subtotal = parseFloat(values[index].value);
+															atfo = subtotal;
+															// console.log(atfo);
+														}else {
+															subtotal = 0;
+															atfo = 0;													
+														}
+													}
+													 
+													value += '</div></div>';
+													annually = annually + atfo;
+													//biannual = biannual + btfo;
+												} else if(fees.payment_id == 2) {
+													//alert('bi annual ang tfo');
+												} else if (fees.payment_id == 3){
+													//alert('quarterly ang tfo');
+												}
+											} else if(details[i].payment_id == 3) {		// Quarterly
+												if(fees.payment_id == 1) {
+													values = $.parseJSON(fees.value);
+													value = '<div class="range-list">' +
+														'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+														'<div class="slide-range" style="display: none;">';
+													
+													for(index in values) {
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+														var cp = parseFloat(details[i].capital),
+															min = parseFloat(values[index].min),
+															max = parseFloat(values[index].max);
+
+														// console.info(cp + ' >=' + min + ' = ');
+														// console.info(cp >= min);
+														// console.log('-------------------------------')
+														// console.info(cp + ' <=' + max + ' = ');
+														// console.info(cp <= max);
+														if(cp >= min && cp <= max) {
+															subtotal = parseFloat(values[index].value);
+															atfo = subtotal;
+														} else {
+															subtotal = 0;
+															atfo = 0;
+														}
+													}
+													
+													value += '</div></div>';
+													annually = annually + atfo;
+													// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);
+												} else if(fees.payment_id == 3) {
+													values = $.parseJSON(fees.value);
+													value = '<div class="range-list">' +
+														'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+														'<div class="slide-range" style="display: none;">';
+													
+													for(index in values) {
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+														value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+														var cp = parseFloat(details[i].capital),
+															min = parseFloat(values[index].min),
+															max = parseFloat(values[index].max);
+
+														// console.info(cp + ' >=' + min + ' = ');
+														// console.info(cp >= min);
+														// console.log('-------------------------------')
+														// console.info(cp + ' <=' + max + ' = ');
+														// console.info(cp <= max);
+														if(cp >= min && cp <= max) {
+															subtotal = parseFloat(values[index].value);
+															qtfo = subtotal / 4;
+														} else {
+															subtotal = 0;
+															qtfo = 0;
+														}
+													}
+													
+													value += '</div></div>';
+													pquarter = pquarter + qtfo;
+													// console.log('Formula Quarterly: ' + qtfo + ' = ' + subtotal + ' / 4 Quarterly Payment for ' + fees.tfo + ' Quarter Total: ' + pquarter);
+												}
+											}
+										}																		
+										total += subtotal;	
+										subtotal_tfo +=tfo_amount;									
+										$tfo_amount = 0;
+										if(details[i].payment_id == 1) {		// Annually
+											//if(fees.payment_id == 1) {  			// Annually										
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+											/* } else if(fees.payment_id == 2) {  //alert('bi-annual');				// Bi-Annually									
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+											} */
+										} else if(details[i].payment_id == 2) {		// Semi-Annual
+											if(fees.payment_id == 1) {
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+											} else if(fees.payment_id == 2){ //alert(fees.payment_id);	
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												
+											}
+										} else if(details[i].payment_id == 3) {		// Quarterly
+										
+											if(fees.payment_id == 1) {
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+											} else if(fees.payment_id == 2) {
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+											} else if(fees.payment_id == 3) {
+												$('<td />', { text: fees.tfo }).appendTo(tr);
+												$('<td />', { html: value }).appendTo(tr);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+											}										
+										}
+									tfo_amount = 0;
+									}
+									
+									form.find('a.clear-requirements').data('app-id', details[i].app_id);
+									form.find('a.clear-requirements').data('nature-id', details[i].buss_nature_id);
+									form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+									
+									$('form.assessment div.hiddenfields').find('input[name="app_id"]').val(details[i].app_id);
+									$('form.assessment div.hiddenfields').find('input[name="total_tax_due"]').val(total);
+									$('form.assessment div.hiddenfields').find('input[name="application_id"]').val(details[i].application_id);
+									$('form.assessment div.hiddenfields').find('input[name="payment_mode"]').val(details[i].payment_id);
+									/* $('form.assessment div.hiddenfields').append('<input type="hidden" name ="app_id[]" value='+details[i].app_id+'>');
+									$('form.assessment div.hiddenfields').append('<input type="hidden" name ="total_tax_due[]" value='+total+'>');
+									$('form.assessment div.hiddenfields').append('<input type="hidden" name ="application_id[]" value='+details[i].application_id+'>'); */
+
+								}).end()
+								.find('').each(function() {
+
+								}).end().appendTo(business_natures);
+								n++;	
+								
+								/**********************insert breakdowns here**************************/
+										if (details[0].payment_id == 1){
+											var breakdown = $('div.row.annual'),
+												atable = breakdown.find('table');
+												
+											atable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+											atable.find('tbody').html('');
+											breakdown.show();
+											$('div.row.quarterly').hide();
+											$('div.row.bi-annual').hide();
+											var first = $('<tr />').appendTo(atable.find('tbody'));
+
+											$('<td />', { text: 'First' }).appendTo(first);
+											$('<td />', { text: due[0].value }).appendTo(first);
+											$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[0].stat}).appendTo(first);
+											$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( total )) + '</strong></span>' }).appendTo(first);
+											breakdowns.push({'label': 'First','dues' : due[0].value,'value': (total),'stat' : 'UnPaid'});
+											breakdownsJSON = JSON.stringify(breakdowns);
+											//$('form.assessment div.hiddenfields').find('input[name="annually]').val(total);
+											//$('form.assessment div.hiddenfields').append('<input type="hidden" name ="breakdowns[]" value='+breakdownsJSON+'>');
+										}
+										// Show Breakdown for bi-annual
+										if (details[0].payment_id == 2){
+										$('div.row.annual').hide();
+											var breakdown = $('div.row.bi-annual'),
+												btable = breakdown.find('table');
+												
+											btable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+											btable.find('tbody').html('');
+											breakdown.show();
+											$('div.row.annual').hide();
+											$('div.row.quarterly').hide();
+											var first = $('<tr />').appendTo(btable.find('tbody'));
+											
+											$('<td />', { text: 'First Bi-Annual Payment' }).appendTo(first);
+											$('<td />', { text: due[0].value }).appendTo(first);
+											$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[0].stat}).appendTo(first);
+											$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right first"><strong>' + currencyFormat(parseFloat( annually + biannual )) + '</strong></span>' }).appendTo(first);
+											
+											breakdowns.push({'label': 'First','dues' : due[0].value,'value': (annually + biannual),'stat' : 'UnPaid'});
+											breakdownsJSON = JSON.stringify(breakdowns);		
+											$('form.assessment div.hiddenfields').find('input[name="biannual"]').val(annually + biannual);										
+											
+											var second = $('<tr />').appendTo(btable.find('tbody'));
+																					
+											$('<td />', { text: 'Second Bi-Annual Payment' }).appendTo(second);
+											$('<td />', { text: due[1].value }).appendTo(second);
+											$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[1].stat}).appendTo(second);
+											$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(biannual)) + '</strong></span>' }).appendTo(second);
+																
+											breakdowns.push({'label': 'Second','dues' : due[1].value,'value': (biannual),'stat' : 'UnPaid'});
+											//$('form.assessment div.hiddenfields').find('input[name="biannual"]').val(biannual);									
+											breakdownsJSON = JSON.stringify(breakdowns);
+											
+										}
+										
+										
+										// Show Breakdown for quarterly
+										if(details[0].payment_id == 3) { // Quarterly									
+										$('div.row.bi-annual').hide();
+											var breakdown = $('div.row.quarterly'),
+												qtable = breakdown.find('table');
+
+											qtable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+											qtable.find('tbody').html('');
+											breakdown.show();
+											$('div.row.bi-annual').hide();
+											$('div.row.annual').hide();	 					
+											for ( k in due){ 										
+											var first = $('<tr />').appendTo(qtable.find('tbody'));
+												if (k==0){
+													$('<td />', { text: due[k].field + ' Payment' }).appendTo(first);
+													$('<td />', { text: due[k].value }).appendTo(first);
+													//$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : details[0].assess_status }).appendTo(first);
+													$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[k].stat }).appendTo(first);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(annually + pquarter)) + '</strong></span>' }).appendTo(first);
+													breakdowns.push({'label': due[k].field.replace(/ /g,"_"),'dues' : due[k].value,'value': (annually + pquarter),'stat' : 'UnPaid'});
+													$('form.assessment div.hiddenfields').find('input[name="quarterly"]').val(annually + pquarter);												
+												} else {
+													$('<td />', { text: due[k].field + ' Payment ' }).appendTo(first);
+													$('<td />', { text: due[k].value }).appendTo(first);
+													$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[k].stat }).appendTo(first);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( pquarter )) + '</strong></span>' }).appendTo(first);						
+													breakdowns.push({'label': due[k].field.replace(/ /g,"_"),'dues' : due[k].value,'value': (pquarter),'stat' : 'UnPaid'});											
+													breakdownsJSON = JSON.stringify(breakdowns);
+												}										
+											}										
+										}
+									$('form.assessment div.hiddenfields').append('<input type="hidden" name ="breakdowns" value='+breakdownsJSON+'>');
+									$('form.assessment div.hiddenfields').append('<input type="hidden" name ="total" value='+total+'>');
+									/**********************end of breakdown insertion**********************/							
+						}//end of for
+					//}
+					} //end of else		
+					// Show Breakdown for bi-annual
+					
+						/* var breakdown = $('div.row.annual'),
+	 						atable = breakdown.find('table');
+							
+						atable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+						atable.find('tbody').html('');
+	 					breakdown.show();
+					
+						for (k in due){
+						var first = $('<tr />').appendTo(atable.find('tbody'));
+							$('<td />', { text: due[k].field + ' Payment ' }).appendTo(first);
+							$('<td />', { text: due[k].value }).appendTo(first);
+							$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( total )) + '</strong></span>' }).appendTo(first);						
+							breakdowns.push({'label': due[k].field + ' Payment ','dues' : due[k],'value': (total),'stat' : 'UnPaid'});
+							breakdownsJSON = JSON.stringify(breakdowns);
+						} */
+					
+ 	 				if(details[0].payment_id == 1) {
+ 	 					form.find('form.assessment input[name="payment"]').val('Annual');
+ 	 					form.find('form.assessment input[name="annually"]').val(parseFloat(annually));
+						form.find('form.assessment input[name="quarterly"]').val(0);
+						form.find('form.assessment input[name="semi_annually"]').val(0);
+ 	 				} else if(details[0].payment_id == 2) {
+ 	 					form.find('form.assessment input[name="payment"]').val('Semi_annual');						
+						form.find('form.assessment input[name="first_quarter"]').val(parseFloat(0));
+						form.find('form.assessment input[name="second_quarter"]').val(parseFloat(0));
+						form.find('form.assessment input[name="third_quarter"]').val(parseFloat(0));
+						form.find('form.assessment input[name="fourth_quarter"]').val(parseFloat(0));
+						
+ 	 					form.find('form.assessment input[name="annually"]').val(0);
+ 	 					form.find('form.assessment input[name="first_semi_annual"]').val(parseFloat(annually + biannual));
+						form.find('form.assessment input[name="second_semi_annual"]').val(parseFloat(biannual));
+						form.find('form.assessment input[name="quarterly"]').val(0);
+ 	 				} else if(details[0].payment_id == 3) { // Quarterly Payment
+ 	 					form.find('form.assessment input[name="payment"]').val('first_quarter');						
+						form.find('form.assessment input[name="first_semi_annual"]').val(parseFloat(0));
+						form.find('form.assessment input[name="second_semi_annual"]').val(parseFloat(0));
+						
+ 	 					form.find('form.assessment input[name="annually"]').val(parseFloat(0)); 	 					
+						form.find('form.assessment input[name="semi_annually"]').val(0);
+						form.find('form.assessment input[name="first_quarter"]').val(parseFloat(annually + pquarter));
+						form.find('form.assessment input[name="second_quarter"]').val(parseFloat(pquarter));
+						form.find('form.assessment input[name="third_quarter"]').val(parseFloat(pquarter));
+						form.find('form.assessment input[name="fourth_quarter"]').val(parseFloat(pquarter));						
+ 	 				}
+
+
+
+ 	 				// // form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+ 	 				// // form.find('.totals span.total-amount').text(incrementor());
+ 	 				// // incrementor(form.find('.totals span.total-amount'), total);
+ 	 				// form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+ 	 			} else {
+ 	 				alert('Please check Required TFO for this business nature');
+ 	 			}
+ 	 		}
+ 	 	});
+ 	 });
+	 
+	/***********ok is clicked to enter gross sales*************/
+	$('#error').on('click','a.ok',function (e){
+		var buss_id = $('#error').find('input[name="business_id"]').val(),
+			app_id  = $('#error').find('input[name="application_id"]').val(),
+			buss_nature_id  = $('#error').find('input[name="buss_nature_id"]').val();
+			bus_line_id  = $('#error').find('input[name="bus_line_id"]').val();
+						
+			//year = $('#error').find('input[name="year"]').val();
+			
+			$('#error').modal('hide');
+			
+		modal = $('#edit-business-nature');
+		modal.modal('show');
+		modal.find('.modal-title').text('Enter Gross Sales');
+		
+		//modal.find('input[name="year"]').val(year);
+		modal.find('input[name="bus_line_id"]').val(bus_line_id);
+		modal.find('input[name="app_id"]').val(app_id);
+		$('.new_app').hide();
+		$('.capital_header').hide();
+		$('.date_application').hide();
+		$('.action_header').hide();
+		$('.new_apps').hide();
+		$('.buss_reqt').hide();
+		
+		$('.gross_header').show();
+		$('.enter_gross').show();
+		modal.find('select[name="buss_nature_id"]').val(buss_nature_id).attr('disabled', 'disabled');	
+		$('.hidden-info').append('<div class="form-group>');
+		$('input[name^="year"]').each(function( index ) {			
+			$('.hidden-info').append('<div class="col-sm-8 input-group">'+
+									 '<span class="input-group-addon">'+$(this).val()+'</span>'+
+									 '<span class="input-group-addon">₱</span>'+
+									 '<input type="text" class ="form-control add-gross" name=gross['+[index]+']>'+
+									 '</div>');
+		});
+		$('.hidden-info').append('<a href="#" class="btn btn-info add-gross"><i class="fa fa-dot-circle-o"></i>Save</a>');
+		$('.hidden-info').append('</div>');	    
+		
+	});
+	/***********end of enter gross*************/
+	
+
+	/**************add gross into table*****************/
+	
+
+
+	$('#edit-business-nature').on('click','a.add-gross' ,function (e) {
+		var gross =$('input[name^="gross"]').map(function(){
+
+					return $(this).val();
+					}).get().join(':'),
+			year = $('input[name^="year"]').map(function(){
+					
+					return $(this).val();
+					}).get().join(':'),
+			bus_line_id = $('#edit-business-nature').find('input[name="bus_line_id"]').val(),
+			app_id = $('#edit-business-nature').find('input[name="app_id"]').val();
+
+	
+
+		$.ajax ({	
+			url: baseurl + 'fees/api/owner/add_gross/' + bus_line_id + '/' + year +  '/'  + gross,
+			type: 'get',
+			dataType: 'json',
+ 	 		success: function(result) {
+				if (result.error ===0){
+					$('#edit-business-nature').hide();
+					modal = $('#assess');
+					modal.modal('show');
+
+					$.ajax({
+					url: baseurl + 'fees/api/owner/assess/' + app_id,
+					type: 'get',
+					dataType: 'json',
+					beforeSend: function() {
+						modal.find();
+					},
+					success: function(result) {
+						if(result.error === 0) {
+							var details = result.data.business,
+								due = result.data.due_date,
+								form = $('#assess'),
+								breakdowns = [],
+								breakdownsJSON = "",						
+								subtotal = 0, total = 0, 
+								given_surcharge = 0,interest = 0;
+								
+								table = form.find('table tbody');
+							
+							form.find('.header-detail span.owner').text(capitalize(details[0].firstname + ' ' + details[0].middlename + ' ' + details[0].lastname));
+							form.find('.header-detail span.business').text(capitalize(details[0].business_name));
+							form.find('.header-detail span.payment').text(capitalize(details[0].payment_type));
+
+							$('div.row.quarterly').hide();
+							var business_natures = $('.business-natures'),
+								clone = $('.clones .clone').clone();
+
+							var qtfo = 0, pquarter = 0, // Quarterly TFO
+								atfo = 0, annually = 0, // Annually TFO
+								btfo = 0, biannual = 0; //Bi annually
+								tax  = 0; 
+							
+							var dues = new Array();
+								
+							business_natures.html('');
+						
+							for(var i in details) {
+								var tdate = new Date(), tdate = tdate.getFullYear(),
+									n=0,tfo_amount = 0,
+									buss_app_date = new Date(details[i].application_date),
+									buss_app_date = buss_app_date.getFullYear();
+									$C = 0, gr = $.parseJSON(details[i].gross),
+									//new_gross = JSON.stringify(gr),
+									payment_mode=details[i].payment_id;												
+									
+									
+								if($.isEmptyObject(gr)) {
+									$C = parseFloat(details[i].capital);
+									console.log('Capital: ' + details[i].capital);
+								} else { //alert('else');
+									for(y in gr) { //alert('gr[y].year = '+gr[y].year + ' tdate= '+tdate);
+										//if(gr[y].year == tdate) {
+											$C = gr[y].gross;
+										//} 
+									}	//alert($C);
+								}
+								
+								clone.clone(true).find('.business-detail').each(function() {
+								 //alert($C);
+									$(this).find('span.nature').text(capitalize(details[i].business_nature));
+									$(this).find('span.address').text(capitalize(details[i].street_address));
+									$(this).find('span.capital').text(currencyFormat(parseFloat($C)));
+									//$(this).find('span.year').text();
+								}).end()
+								.find('table').each(function() {
+									var tbl = $(this).find('tbody'),
+										msg = $(this).parent().find('.messages'),
+										subtotal = 0,store_surcharge=0;
+									tbl.html('');
+									var assess_btn = result.data.ignore[0];										
+										for(indx in result.data.tfos[i]) {
+											var fees = result.data.tfos[i][indx],
+												//yearget = grossto * .02,													
+												tr = $('<tr />').appendTo(tbl),
+												value = '', gross = 0,subtotal_tfo = 0;											
+											if(result.data.required.length > 0) {
+												form.find('a.approve-now').attr('disabled', true);
+												form.find('a.clear-requirements').attr('disabled', false);
+												show_message(msg, 'Missing requirement: \r\n<strong>' + result.data.required[i].join(', ') + '</strong>', 'Warning!', 'danger');
+											} else {
+												form.find('a.approve-now').attr('disabled', false);
+												form.find('a.clear-requirements').attr('disabled', true);
+											}											
+											if(result.data.ignore[i][indx] === true) {
+												//form.find('a.assess-now').removeClass('disabled');
+												form.find('a.assess-now').attr('disabled', true);
+												show_message(msg, 'This Business is already assessed. Please proceed to Payment.', 'Information!', 'info');
+											} else {									
+												//form.find('a.assess-now').attr('disabled', false);
+												$('a.assess-now').removeClass('disabled');
+											}
+											if(fees.type == 1) { // Formula													
+												var variables = $.parseJSON(fees.variables),
+													formula = fees.value;
+												extract(variables);
+												var amt = eval(gross); 
+												subtotal = parseFloat(amt);
+													if(details[i].payment_id == 1) { // Business paymentmode is Annually
+													value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>'+ '(' + fees.value + ')' + ' ' + currencyFormat(parseFloat(amt)) + '</strong></span>';																
+																annually = amt;		
+																atfo = annually;
+																annually = annually + atfo;																
+																	if (result.data.renewed == 1){
+																		surcharges = result.data.add_surcharge;																				
+																		given_surcharge = given_surcharge + parseFloat(eval(amt * surcharges[i].surcharge));
+																		interest = interest + parseFloat((eval(amt * surcharge[i].interest) * result.data.number_of_months));
+																	}															
+													} else if(details[i].payment_id == 2) { 	// Business paymentmode is Semi-Annual
+													value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + '(' + fees.value + ')' +' ' + currencyFormat(parseFloat(amt)) + '</strong></span>';																											
+																if (fees.tfo_type == 1){																		
+																	btfo = amt / 2;											
+																	biannual = biannual + btfo;
+																	console.log('Formula Bi-Annual: ' + btfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + biannual);
+																		if (result.data.renewed == 1){
+																			surcharges = result.data.add_surcharge;
+																			given_surcharge = given_surcharge + parseFloat(eval(amt * surcharges[i].surcharge));
+																			interest = interest + parseFloat((eval(amt * surcharges[i].interest) * result.data.number_of_months));
+																		}
+																} else {
+																	btfo = subtotal;											
+																	biannual = biannual + btfo;
+																}
+														//tfo_amount	+= biannual;
+														//alert(given_surcharge);
+													} else if(details[i].payment_id == 3) {		// Business paymentmode is Quarterly
+															value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';											
+															
+															if (fees.tfo_type == 1){
+																	qtfo = subtotal / 4;											
+																	pquarter = pquarter + qtfo;	
+																	
+																	if (result.data.renewed == 1){
+																		surcharges = result.data.add_surcharge;
+																		given_surcharge = given_surcharge + parseFloat(eval(amt * surcharges[i].surcharge));
+																		interest = interest + parseFloat((eval(amt * surcharges[i].interest) * result.data.number_of_months));
+																	}
+																	
+															} else {
+																qtfo = subtotal;											
+																pquarter = pquarter + qtfo;													
+																console.log('Formula Quarterlyfd: ' + qtfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Quarterly Total: ' + pquarter);
+															}
+														//tfo_amount += pquarter;												
+													}											
+											}//end of Formula
+											else if(fees.type == 2) { // TFO is of Constant type
+												if(details[i].payment_id == 1) {  // Business paymentmode is Annually
+												subtotal = parseFloat(fees.value);
+														value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														atfo = subtotal;
+														annually = annually + atfo; 
+															if (result.data.renewed == 1){
+																surcharges = result.data.add_surcharge;
+																given_surcharge = given_surcharge + parseFloat(eval(amt * surcharges[i].surcharge));
+																interest = interest + parseFloat((eval(amt * surcharges[i].interest) * result.data.number_of_months));
+															}
+												} else if(details[i].payment_id == 2) { //Business paymentmode is Semi-Annual													
+												
+												if(fees.payment_id == 1) {	// TFO paymentmode is Annual												
+												subtotal = parseFloat(fees.value);
+													value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';													
+													atfo = subtotal;
+													annually = annually + atfo; 
+													tfo_amount += annually; 
+												} else if(fees.payment_id == 2) { //TFO paymentmode is Bi-Annual												
+													value = '<span class="pull-left label label-warning">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														if (fees.tfo_type == 1){
+															btfo = subtotal / 2;											
+															biannual = biannual + btfo;	
+															
+															//tax + surcharges if not payed on time
+															if (result.data.renewed == 1){
+																surcharges = result.data.add_surcharge;
+																given_surcharge = given_surcharge + parseFloat(eval(subtotal * surcharges[i].surcharge));
+																interest = interest + parseFloat((eval(subtotal * surcharges[i].interest) * result.data.number_of_months));
+															}
+															console.log('Formula Bi-Annual: ' + btfo + ' = ' + subtotal + '  First Payment for ' + fees.tfo + ' Annually Total: ' + biannual);
+														} else {
+															btfo = subtotal;											
+															biannual = biannual + btfo;										
+															console.log('Formula Bi-Annual: ' + btfo + ' = ' + subtotal + '  First Payment for ' + fees.tfo + ' Annually Total: ' + biannual);
+														}												
+												}
+													/* if(fees.payment_id == 1) {
+														value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														subtotal = parseFloat(fees.value);
+														atfo = subtotal;
+														annually = annually + atfo; 
+													} else if(fees.payment_id == 2) { 
+														if (fees.tfo_type == 1){
+															atfo = subtotal;
+															annually = annually + atfo; 																
+															//tax + surcharges if not payed on time
+															if (result.data.renewed == 1){
+																surcharges = result.data.add_surcharge;
+																given_surcharge = given_surcharge + parseFloat(eval(amt * surcharges[i].surcharge));
+																interest = interest + parseFloat((eval(amt * surcharges[i].interest) * result.data.number_of_months));
+															}
+														} else {
+															atfo = subtotal;
+															biannual = biannual + atfo;
+														}
+													} */
+												} else if(details[i].payment_id == 3 ){ //Business paymentmode is Quarterly
+													subtotal = parseFloat(fees.value);
+														value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														subtotal = parseFloat(fees.value);
+														atfo = subtotal;
+														annually = annually + atfo; 
+														
+															if (fees.tfo_type == 1){
+																qtfo = subtotal / 4;											
+																pquarter = pquarter + qtfo;	
+																
+																//tax + surcharges if not payed on time
+																if (result.data.renewed == 1){
+																	surcharges = result.data.add_surcharge;
+																	given_surcharge = given_surcharge + parseFloat(eval(subtotal * surcharges[i].surcharge));
+																	interest = interest + parseFloat((eval(subtotal * surcharges[i].interest) * result.data.number_of_months));
+																}
+															} else {
+																qtfo = subtotal;											
+																pquarter = pquarter + qtfo;
+															}
+												}else if(details[i].payment_id == 3) {		//Business paymentmode is of Quarterly
+													if(fees.payment_id == 1) {	// TFO paymentmode is Annual															
+														value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+														subtotal = parseFloat(fees.value);
+														atfo = subtotal;
+														annually = annually + atfo; 												
+														tfo_amount += pquarter; 
+													} else if (fees.payment_id == 3) { //TFO paymentmode is Quarterly														
+														value = '<span class="pull-left label label-warning">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+															if (fees.tfo_type == 1){
+																subtotal = parseFloat(fees.value);
+																qtfo = subtotal / 4;											
+																pquarter = pquarter + atfo;										
+																
+																//tax + surcharges if not payed on time
+																if (result.data.renewed == 1){
+																	surcharges = result.data.add_surcharge;
+																	given_surcharge = given_surcharge + parseFloat(eval(amt * surcharges[i].surcharge));
+																	interest = interest + parseFloat((eval(amt * surcharges[i].interest) * result.data.number_of_months));
+																}
+															} else {
+																subtotal = parseFloat(fees.value);
+																qtfo = subtotal;
+																pquarter = pquarter + atfo;
+															}															
+													}											
+												} 
+											} //end of Constant
+											else if(fees.type == 3) {		// Range								
+												if(details[i].payment_id == 1) {			// Annually	ang business								
+													if(fees.payment_id == 1) {				// Annually ang tfo										
+														values = $.parseJSON(fees.value);
+														value = '<div class="range-list">' +
+															'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+															'<div class="slide-range" style="display: none;">';
+														
+														for(index in values) {
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+															var cp = parseFloat(details[i].capital),
+																min = parseFloat(values[index].min),
+																max = parseFloat(values[index].max);
+															//alert(cp);
+															// console.info(cp + ' >=' + min + ' = ');
+															// console.info(cp >= min);
+															// console.log('-------------------------------')
+															// console.info(cp + ' <=' + max + ' = ');
+															// console.info(cp <= max);
+															if(cp >= min && cp <= max) { 
+																subtotal = parseFloat(values[index].value);
+																atfo = subtotal;
+																// console.log(atfo);
+															}else {
+																subtotal = 0;
+																atfo = 0;													
+															}
+														}
+														 
+														value += '</div></div>';
+														annually = annually + atfo;
+														// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Annual Payment for ' + fees.tfo);
+													} else if (fees.payment_id == 2){ //Bi-annuall ang tfo
+													//alert('Bi-annuall ang tfo');
+														values = $.parseJSON(fees.value);
+														value = '<div class="range-list">' +
+															'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+															'<div class="slide-range" style="display: none;">';
+														
+														for(index in values) {
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+															var cp = parseFloat(details[i].capital),
+																min = parseFloat(values[index].min),
+																max = parseFloat(values[index].max);
+															//alert(cp);
+															// console.info(cp + ' >=' + min + ' = ');
+															// console.info(cp >= min);
+															// console.log('-------------------------------')
+															// console.info(cp + ' <=' + max + ' = ');
+															// console.info(cp <= max);
+															if(cp >= min && cp <= max) { 
+																subtotal = parseFloat(values[index].value);
+																btfo = subtotal / 2;
+																// console.log(atfo);
+															}else {
+																subtotal = 0;
+																btfo = 0;													
+															}
+														}
+														 
+														value += '</div></div>';
+														//annually = annually + atfo;
+														biannual = biannual + btfo;
+													}
+												} else if(details[i].payment_id == 2) {		// Semi-Annual ang business
+												//alert('bi -annual');
+													if(fees.payment_id == 1) {// alert('annual tfo');
+														values = $.parseJSON(fees.value);
+														value = '<div class="range-list">' +
+															'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+															'<div class="slide-range" style="display: none;">';
+														
+														for(index in values) {
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+															var cp = parseFloat(details[i].capital),
+																min = parseFloat(values[index].min),
+																max = parseFloat(values[index].max);
+															//alert(cp);
+															// console.info(cp + ' >=' + min + ' = ');
+															// console.info(cp >= min);
+															// console.log('-------------------------------')
+															// console.info(cp + ' <=' + max + ' = ');
+															// console.info(cp <= max);
+															if(cp >= min && cp <= max) { 
+																subtotal = parseFloat(values[index].value);
+																atfo = subtotal;
+																// console.log(atfo);
+															}else {
+																subtotal = 0;
+																atfo = 0;													
+															}
+														}
+														 
+														value += '</div></div>';
+														annually = annually + atfo;
+														//biannual = biannual + btfo;
+													} else if(fees.payment_id == 2) {
+														//alert('bi annual ang tfo');
+													} else if (fees.payment_id == 3){
+														//alert('quarterly ang tfo');
+													}
+												} else if(details[i].payment_id == 3) {		// Quarterly
+													if(fees.payment_id == 1) {
+														values = $.parseJSON(fees.value);
+														value = '<div class="range-list">' +
+															'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+															'<div class="slide-range" style="display: none;">';
+														
+														for(index in values) {
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+															var cp = parseFloat(details[i].capital),
+																min = parseFloat(values[index].min),
+																max = parseFloat(values[index].max);
+
+															// console.info(cp + ' >=' + min + ' = ');
+															// console.info(cp >= min);
+															// console.log('-------------------------------')
+															// console.info(cp + ' <=' + max + ' = ');
+															// console.info(cp <= max);
+															if(cp >= min && cp <= max) {
+																subtotal = parseFloat(values[index].value);
+																atfo = subtotal;
+															} else {
+																subtotal = 0;
+																atfo = 0;
+															}
+														}
+														
+														value += '</div></div>';
+														annually = annually + atfo;
+														// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);
+													} else if(fees.payment_id == 3) {
+														values = $.parseJSON(fees.value);
+														value = '<div class="range-list">' +
+															'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+															'<div class="slide-range" style="display: none;">';
+														
+														for(index in values) {
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+															value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+															var cp = parseFloat(details[i].capital),
+																min = parseFloat(values[index].min),
+																max = parseFloat(values[index].max);
+
+															// console.info(cp + ' >=' + min + ' = ');
+															// console.info(cp >= min);
+															// console.log('-------------------------------')
+															// console.info(cp + ' <=' + max + ' = ');
+															// console.info(cp <= max);
+															if(cp >= min && cp <= max) {
+																subtotal = parseFloat(values[index].value);
+																qtfo = subtotal / 4;
+															} else {
+																subtotal = 0;
+																qtfo = 0;
+															}
+														}
+														
+														value += '</div></div>';
+														pquarter = pquarter + qtfo;
+														// console.log('Formula Quarterly: ' + qtfo + ' = ' + subtotal + ' / 4 Quarterly Payment for ' + fees.tfo + ' Quarter Total: ' + pquarter);
+													}
+												}
+											}																		
+											total += subtotal;	
+											subtotal_tfo +=tfo_amount;									
+											$tfo_amount = 0;
+											if(details[i].payment_id == 1) {		// Annually
+												//if(fees.payment_id == 1) {  			// Annually										
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												/* } else if(fees.payment_id == 2) {  //alert('bi-annual');				// Bi-Annually									
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												} */
+											} else if(details[i].payment_id == 2) {		// Semi-Annual
+												if(fees.payment_id == 1) {
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												} else if(fees.payment_id == 2){ //alert(fees.payment_id);	
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+													
+												}
+											} else if(details[i].payment_id == 3) {		// Quarterly
+											
+												if(fees.payment_id == 1) {
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												} else if(fees.payment_id == 2) {
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												} else if(fees.payment_id == 3) {
+													$('<td />', { text: fees.tfo }).appendTo(tr);
+													$('<td />', { html: value }).appendTo(tr);
+													$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+												}										
+											}										
+										}
+										
+										form.find('a.clear-requirements').data('app-id', details[i].app_id);
+										form.find('a.clear-requirements').data('nature-id', details[i].buss_nature_id);
+										form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+										
+										$('form.assessment div.hiddenfields').find('input[name="app_id"]').val(details[i].app_id);
+										$('form.assessment div.hiddenfields').find('input[name="total_tax_due"]').val(total);
+										$('form.assessment div.hiddenfields').find('input[name="application_id"]').val(details[i].application_id);
+										$('form.assessment div.hiddenfields').find('input[name="payment_mode"]').val(details[i].payment_id);
+										/* $('form.assessment div.hiddenfields').append('<input type="hidden" name ="app_id[]" value='+details[i].app_id+'>');
+										$('form.assessment div.hiddenfields').append('<input type="hidden" name ="total_tax_due[]" value='+total+'>');
+										$('form.assessment div.hiddenfields').append('<input type="hidden" name ="application_id[]" value='+details[i].application_id+'>'); */
+
+									}).end()
+									.find('').each(function() {
+
+									}).end().appendTo(business_natures);
+									n++;	
+
+										//});	
+			//});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+									
+									/**********************insert breakdowns here**************************/
+											if (details[0].payment_id == 1){
+												var breakdown = $('div.row.annual'),
+													atable = breakdown.find('table');
+													
+												atable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+												atable.find('tbody').html('');
+												breakdown.show();
+												$('div.row.quarterly').hide();
+												$('div.row.bi-annual').hide();
+												var first = $('<tr />').appendTo(atable.find('tbody'));
+
+												$('<td />', { text: 'First' }).appendTo(first);
+												$('<td />', { text: due[0].value }).appendTo(first);
+												$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[0].stat}).appendTo(first);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( total )) + '</strong></span>' }).appendTo(first);
+												breakdowns.push({'label': 'First','dues' : due[0].value,'value': (total),'stat' : 'UnPaid'});
+												breakdownsJSON = JSON.stringify(breakdowns);
+												
+												if(result.data.renewed === 1){
+														var second = $('<tr />').appendTo(btable.find('tbody'));
+																						
+														$('<td />', { text: 'Surcharges' }).css({'font-weight':'bold', 'color' :'red'}).appendTo(second);
+														$('<td />', { text: due[0].value }).appendTo(second);
+														$('<td />', { text: 'Unpaid'}).appendTo(second);
+														$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(given_surcharge)) + '</strong></span>' }).appendTo(second);
+														
+														var third = $('<tr />').appendTo(btable.find('tbody'));
+																								
+														$('<td />', { text: 'Penalties' }).css({'font-weight':'bold', 'color' :'red'}).appendTo(third);
+														$('<td />', { text: due[0].value }).appendTo(third);
+														$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[0].stat}).appendTo(third);
+														$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(interest)) + '</strong></span>' }).appendTo(third);
+												}
+												//$('form.assessment div.hiddenfields').find('input[name="annually]').val(total);
+												//$('form.assessment div.hiddenfields').append('<input type="hidden" name ="breakdowns[]" value='+breakdownsJSON+'>');
+											}
+											// Show Breakdown for bi-annual
+											if (details[0].payment_id == 2){
+											$('div.row.annual').hide();
+												var breakdown = $('div.row.bi-annual'),
+													btable = breakdown.find('table');
+													
+												btable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+												btable.find('tbody').html('');
+												breakdown.show();
+												$('div.row.annual').hide();
+												$('div.row.quarterly').hide();
+												var first = $('<tr />').appendTo(btable.find('tbody'));
+												
+												$('<td />', { text: 'First Bi-Annual Payment' }).appendTo(first);
+												$('<td />', { text: due[0].value }).appendTo(first);
+												$('<td />', { text:'Unpaid'}).appendTo(first);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right first"><strong>' + currencyFormat(parseFloat( annually + biannual )) + '</strong></span>' }).appendTo(first);
+												
+												breakdowns.push({'label': 'First','dues' : due[0].value,'value': (annually + biannual),'stat' : 'UnPaid'});
+												breakdownsJSON = JSON.stringify(breakdowns);		
+												$('form.assessment div.hiddenfields').find('input[name="biannual"]').val(annually + biannual);										
+												
+												
+												if(result.data.renewed === 1){
+														var third = $('<tr />').appendTo(btable.find('tbody'));
+																						
+														$('<td />', { text: 'Surcharges' }).css({'font-weight':'bold', 'color' :'red'}).appendTo(third);
+														$('<td />', { text: due[0].value }).appendTo(third);
+														$('<td />', { text: 'Unpaid'}).appendTo(third);
+														$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(given_surcharge)) + '</strong></span>' }).appendTo(third);
+														
+														var fourth = $('<tr />').appendTo(btable.find('tbody'));
+																								
+														$('<td />', { text: 'Penalties' }).css({'font-weight':'bold', 'color' :'red'}).appendTo(fourth);
+														$('<td />', { text: due[0].value }).appendTo(fourth);
+														$('<td />', { text: 'Unpaid'}).appendTo(fourth);
+														$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(interest)) + '</strong></span>' }).appendTo(fourth);
+													}
+													
+												var second = $('<tr />').appendTo(btable.find('tbody'));
+																						
+												$('<td />', { text: 'Second Bi-Annual Payment' }).appendTo(second);
+												$('<td />', { text: due[1].value }).appendTo(second);
+												$('<td />', { text: 'Unpaid' }).appendTo(second);
+												$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(biannual)) + '</strong></span>' }).appendTo(second);
+																	
+												breakdowns.push({'label': 'Second','dues' : due[1].value,'value': (biannual),'stat' : 'UnPaid'});
+												//$('form.assessment div.hiddenfields').find('input[name="biannual"]').val(biannual);									
+												breakdownsJSON = JSON.stringify(breakdowns);													
+												
+											}
+											
+											
+											// Show Breakdown for quarterly
+											if(details[0].payment_id == 3) { // Quarterly									
+											$('div.row.bi-annual').hide();
+												var breakdown = $('div.row.quarterly'),
+													qtable = breakdown.find('table');
+
+												qtable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+												qtable.find('tbody').html('');
+												breakdown.show();
+												$('div.row.bi-annual').hide();
+												$('div.row.annual').hide();	 					
+												for ( k in due){ 										
+												var first = $('<tr />').appendTo(qtable.find('tbody'));
+													if (k==0){
+														$('<td />', { text: due[k].field + ' Payment' }).appendTo(first);
+														$('<td />', { text: due[k].value }).appendTo(first);
+														//$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : details[0].assess_status }).appendTo(first);
+														$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[k].stat }).appendTo(first);
+														$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(annually + pquarter)) + '</strong></span>' }).appendTo(first);
+														breakdowns.push({'label': due[k].field.replace(/ /g,"_"),'dues' : due[k].value,'value': (annually + pquarter),'stat' : 'UnPaid'});
+														$('form.assessment div.hiddenfields').find('input[name="quarterly"]').val(annually + pquarter);	
+														
+														if(result.data.renewed === 1){
+															var second = $('<tr />').appendTo(btable.find('tbody'));
+																							
+															$('<td />', { text: 'Surcharges' }).css({'font-weight':'bold', 'color' :'red'}).appendTo(second);
+															$('<td />', { text: due[0].value }).appendTo(second);
+															$('<td />', { text:  'Unpaid'}).appendTo(second);
+															$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(given_surcharge)) + '</strong></span>' }).appendTo(second);
+															
+															var third = $('<tr />').appendTo(btable.find('tbody'));
+																									
+															$('<td />', { text: 'Penalties' }).css({'font-weight':'bold', 'color' :'red'}).appendTo(third);
+															$('<td />', { text: due[0].value }).appendTo(third);
+															$('<td />', { text: (details[0].assess_status === null) ? 'Unpaid' : result.data.breakdowns[0].stat}).appendTo(third);
+															$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(interest)) + '</strong></span>' }).appendTo(third);
+														}
+													} else {
+														$('<td />', { text: due[k].field + ' Payment ' }).appendTo(first);
+														$('<td />', { text: due[k].value }).appendTo(first);
+														$('<td />', { text:  'Unpaid'}).appendTo(first);
+														$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( pquarter )) + '</strong></span>' }).appendTo(first);						
+														breakdowns.push({'label': due[k].field.replace(/ /g,"_"),'dues' : due[k].value,'value': (pquarter),'stat' : 'UnPaid'});											
+														breakdownsJSON = JSON.stringify(breakdowns);
+													}										
+												}
+												
+											}
+										$('form.assessment div.hiddenfields').append('<input type="hidden" name ="breakdowns" value='+breakdownsJSON+'>');
+										$('form.assessment div.hiddenfields').append('<input type="hidden" name ="total" value='+total+'>');
+										/**********************end of breakdown insertion**********************/							
+							}//end of for
+							//}	//end of else			
+							
+							if(details[0].payment_id == 1) {
+								form.find('form.assessment input[name="payment"]').val('Annual');
+								form.find('form.assessment input[name="annually"]').val(parseFloat(annually));
+								form.find('form.assessment input[name="quarterly"]').val(0);
+								form.find('form.assessment input[name="semi_annually"]').val(0);
+							} else if(details[0].payment_id == 2) {
+								form.find('form.assessment input[name="payment"]').val('Semi_annual');						
+								form.find('form.assessment input[name="first_quarter"]').val(parseFloat(0));
+								form.find('form.assessment input[name="second_quarter"]').val(parseFloat(0));
+								form.find('form.assessment input[name="third_quarter"]').val(parseFloat(0));
+								form.find('form.assessment input[name="fourth_quarter"]').val(parseFloat(0));
+								
+								form.find('form.assessment input[name="annually"]').val(0);
+								form.find('form.assessment input[name="first_semi_annual"]').val(parseFloat(annually + biannual));
+								form.find('form.assessment input[name="second_semi_annual"]').val(parseFloat(biannual));
+								form.find('form.assessment input[name="quarterly"]').val(0);
+							} else if(details[0].payment_id == 3) { // Quarterly Payment
+								form.find('form.assessment input[name="payment"]').val('first_quarter');						
+								form.find('form.assessment input[name="first_semi_annual"]').val(parseFloat(0));
+								form.find('form.assessment input[name="second_semi_annual"]').val(parseFloat(0));
+								
+								form.find('form.assessment input[name="annually"]').val(parseFloat(0)); 	 					
+								form.find('form.assessment input[name="semi_annually"]').val(0);
+								form.find('form.assessment input[name="first_quarter"]').val(parseFloat(annually + pquarter));
+								form.find('form.assessment input[name="second_quarter"]').val(parseFloat(pquarter));
+								form.find('form.assessment input[name="third_quarter"]').val(parseFloat(pquarter));
+								form.find('form.assessment input[name="fourth_quarter"]').val(parseFloat(pquarter));						
+							}
+
+
+
+							// // form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+							// // form.find('.totals span.total-amount').text(incrementor());
+							// // incrementor(form.find('.totals span.total-amount'), total);
+							// form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+						} else {
+							alert('Please check Required TFO for this business nature');
+						}
+					}
+				});
+				}else {
+					alert('error');
+				}
+ 	 		}	
+		//});
+		
+	});
+	/**************end of adding gross into table*****************/
+	
+	 /***********assessment form close button clicked*************/
+	 
+	$('#assess').on('click','button.close-modal',function (e) {
+		location.reload();
+		var activeIndex = $('li').index($('li.active')[0]);
+		//alert(activeIndex+1);		
+		/* var item=$(this).parents('a').index();
+		alert(item);
+		$('ul#myTab1 li a').each(function() { //alert('am here');
+		   var item=$(this).parent();
+			$('ul li.active').removeClass('active');
+			//$(this).closest('li').addClass('active');
+			item.addClass("active");
+		});  */
+		$('a[data-toggle="tab"]').on('shown', function (e) {
+			//save the latest tab; use cookies if you like 'em better:
+			//localStorage.setItem('lastTab', $(e.target).attr('href'));
+			localStorage.setItem('lastTab',$(this).attr('href'));
+			});
+		
+		//go to the latest tab, if it exists:
+		var lastTab = localStorage.getItem('lastTab');alert('page refresh');
+			if (lastTab) {
+				$('#'+lastTab).tab('show');
+			}
+		
+	 });
+	 /***********end************/
+	 /*------------------------------------
+	 *
+	 *
+	 *------------------------------------*/
+	 
+	 
+	$('table#reassess tbody').on('click', 'a.re-assess', function(e){ //alert('hahah');
+ 	 	e.preventDefault();
+ 	 	var data = $(this).data(),value1 = '',
+ 	 		modal = $('#reassess');
+
+ 	 	modal.modal('show');
+
+ 	 	$.ajax({
+ 	 		url: baseurl + 'fees/api/owner/re_assess/' + data.appid,
+ 	 		type: 'get',
+ 	 		dataType: 'json',
+ 	 		beforeSend: function() {
+ 	 			modal.find();
+ 	 		},
+ 	 		success: function(result) {
+ 	 			if(result.error === 0) {
+ 	 				var details = result.data.business,
+						due = result.data.due_date,
+ 	 					form = $('#reassess'),
+						breakdowns = [],
+						breakdownsJSON = "",
+ 	 					subtotal = 0, //total = 0;
+ 	 					table = form.find('table tbody');
+
+ 	 				form.find('.header-detail span.owner').text(capitalize(details[0].firstname + ' ' + details[0].middlename + ' ' + details[0].lastname));
+ 	 				form.find('.header-detail span.business').text(capitalize(details[0].business_name));
+ 	 				form.find('.header-detail span.payment').text(capitalize(details[0].payment_type));
+
+ 	 				$('div.row.re-quarterly').hide();
+ 	 				var business_natures = $('.business-nature'),
+ 	 					clone = $('.clones1 .clone1').clone();
+
+ 	 				var qtfo = 0, pquarter = 0, // Quarterly TFO
+ 	 					atfo = 0, annually = 0, // Annually TFO
+						btfo = 0, biannual = 0; //Bi annually
+					
+					var dues = new Array();
+						
+ 	 				business_natures.html('');
+				
+					//Get due date
+					for (var j in due){
+						dues.push(due[j].value);
+						console.log(due[j].value);
+					}
+					
+ 	 				for(var i in details) { //alert(details[i].app_id);
+						var tdate = new Date(),
+							$C = 0, gr = $.parseJSON(details[i].gross);
+							
+						console.log($.isEmptyObject(gr));
+						if($.isEmptyObject(gr)) {
+							$C = parseFloat(details[i].capital);
+							console.log('Capital: ' + details[i].capital);
+						} else {
+							for(y in gr) {
+								if(gr[y].year == tdate.getFullYear()) {
+									$C = gr[y].gross;
+								}
+							}
+						}
+ 	 					clone.clone(true).find('.business-detail').each(function() {
+ 	 						$(this).find('span.nature').text(capitalize(details[i].business_nature));
+ 	 						$(this).find('span.address').text(capitalize(details[i].street_address));
+ 	 						$(this).find('span.capital').text(currencyFormat(parseFloat($C)));
+ 	 					}).end()
+ 	 					.find('table').each(function() {
+ 	 						var tbl = $(this).find('tbody'),
+ 	 							msg = $(this).parent().find('.messages'),
+								subtotal = 0;
+ 	 						tbl.html('');
+ 	 						var assess_btn = result.data.ignore[0];
+ 	 						for(indx in result.data.tfos[i]) { 
+ 	 							var fees = result.data.tfos[i][indx],									
+		 	 						tr = $('<tr />').appendTo(tbl),
+		 	 						value = '', gross = 0,total=0;
+								
+		 	 					if(result.data.required.length > 0) {
+				 					form.find('a.approve-now').attr('disabled', true);
+				 					form.find('a.clear-requirements').attr('disabled', false);
+				 					show_message(msg, 'Missing requirement: \r\n<strong>' + result.data.required[i].join(', ') + '</strong>', 'Warning!', 'danger');
+				 				} else {
+				 					form.find('a.approve-now').attr('disabled', false);
+				 					form.find('a.clear-requirements').attr('disabled', true);
+				 				}
+								
+				 				if(result.data.ignore[i][indx] === true) { alert('true');
+								
+				 					show_message(msg, 'This Business is already assessed. Please proceed to Approval.', 'Information!', 'info');
+									//form.find('a.assess-now').addClass('disabled');
+				 					form.find('a.assess-now').attr('disabled', true);
+				 				} else { alert(result.data.ignore[i][indx]); alert('false');
+				 					form.find('a.assess-now').attr('disabled', false);
+									//form.find('a.assess-now').removeClass('disabled');
+				 				}
+								
+				 				if(fees.type == 1) { // Formula
+								
+		 	 						var variables = $.parseJSON(fees.variables),
+		 	 							formula = fees.value;
+									
+		 	 						extract(variables);
+
+		 	 						var amt = eval(formula); //parseFloat(eval(formula));
+									
+		 	 						if(details[i].payment_id == 1) {		// Annually
+		 	 							if(fees.payment_id == 1) {				// Annually
+			 	 							value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';
+		 	 								subtotal = parseFloat(amt);
+		 	 								atfo = subtotal;
+		 	 								annually = annually + atfo;											
+										}
+		 	 						} else if(details[i].payment_id == 2) {		// Semi-Annual
+									
+		 	 							if(fees.payment_id == 1) {
+											value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';
+											subtotal = parseFloat(amt);
+		 	 								btfo = amt;
+											biannual = biannual + btfo;											
+											
+						 				} else if(fees.payment_id == 2) {
+											value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';
+		 	 								subtotal = parseFloat(amt);
+		 	 								btfo = subtotal / 2;
+		 	 								biannual = biannual + btfo;
+											
+						 				} else if(fees.payment_id == 3){
+											value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';
+		 	 								subtotal = parseFloat(amt);
+		 	 								btfo = subtotal / 4;
+											biannual = biannual + btfo;
+		 	 								//annually = annually + btfo;										
+										}										
+		 	 						} else if(details[i].payment_id == 3) {		// Quarterly
+		 	 							if(fees.payment_id == 1) {
+		 	 								value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';
+		 	 								subtotal = parseFloat(amt);
+		 	 								atfo = subtotal;
+		 	 								annually = annually + atfo;
+											
+		 	 							} else if(fees.payment_id == 3) {
+		 	 								value = '<span class="pull-left label label-warning">Formula Type</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(amt)) + '</strong></span>';
+		 	 								subtotal = parseFloat(amt);
+		 	 								qtfo = subtotal / 4;
+		 	 								pquarter = pquarter + qtfo;		 	 								
+						 				}
+		 	 						}
+		 	 					} else if(fees.type == 2) { // Constant	
+								
+		 	 						if(details[i].payment_id == 1) { // Annually
+									
+		 	 							if(fees.payment_id == 1) {	// Annually
+			 	 							value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+		 	 								subtotal = parseFloat(fees.value);
+		 	 								btfo = subtotal;
+		 	 								annually = annually + btfo;
+											
+		 	 							}  else if(fees.payment_id == 2) {
+											value = '<span class="pull-left label label-warning">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+		 	 								subtotal = parseFloat(fees.value);
+		 	 								btfo = subtotal / 2;
+		 	 								biannual = biannual + btfo;
+						 				}
+									
+		 	 						} else if(details[i].payment_id == 2) {		// Semi-Annual /*ari dri tan aw dae*/
+								
+		 	 							if(fees.payment_id == 1) {
+											value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+		 	 								subtotal = parseFloat(fees.value);
+		 	 								btfo = subtotal;
+		 	 								annually = annually + btfo;
+		 	 								
+						 				} else if(fees.payment_id == 2) {
+										value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(		
+											parseFloat(fees.value)) + '</strong></span>';
+		 	 								subtotal = parseFloat(fees.value);
+		 	 								btfo = subtotal / 2;
+		 	 								biannual = biannual + btfo;
+						 				}
+		 	 						} else if(details[i].payment_id == 3) {		// Quarterly
+		 	 							if(fees.payment_id == 1) { 
+		 	 								value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+		 	 								subtotal = parseFloat(fees.value);
+		 	 								atfo = subtotal;
+		 	 								annually = annually + atfo;										
+		 	 								// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);
+		 	 							} else if(fees.payment_id == 3) { 
+		 	 								value = '<span class="pull-left label label-success">Constant Value</span><span class="pull-left">&nbsp;&nbsp;&nbsp;&nbsp;&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(fees.value)) + '</strong></span>';
+		 	 								subtotal = parseFloat(fees.value);
+		 	 								qtfo = subtotal / 4;
+		 	 								pquarter = pquarter + qtfo;											
+		 	 								// console.log('Formula Quarterly: ' + qtfo + ' = ' + subtotal + ' / 4 Quarterly Payment for ' + fees.tfo + ' Quarter Total: ' + pquarter);
+						 				}
+
+		 	 						} //alert(subtotal); 
+		 	 					} else if(fees.type == 3) {		// Range
+		 	 						if(details[i].payment_id == 1) {			// Annually
+		 	 							if(fees.payment_id == 1) {				// Annually
+			 	 							values = $.parseJSON(fees.value);
+				 	 						value = '<div class="range-list">' +
+												'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+												'<div class="slide-range" style="display: none;">';
+											
+											for(index in values) {
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+												var cp = parseFloat(details[i].capital),
+													min = parseFloat(values[index].min),
+													max = parseFloat(values[index].max);
+												//alert(cp);
+												// console.info(cp + ' >=' + min + ' = ');
+												// console.info(cp >= min);
+												// console.log('-------------------------------')
+												// console.info(cp + ' <=' + max + ' = ');
+												// console.info(cp <= max);
+												if(cp >= min && cp <= max) { 
+													subtotal = parseFloat(values[index].value);
+													atfo = subtotal;
+													// console.log(atfo);
+												}else {
+													subtotal = 0;
+													atfo = 0;													
+												}
+											}
+											 
+											value += '</div></div>';
+											annually = annually + atfo;
+											// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Annual Payment for ' + fees.tfo);
+						 				}
+		 	 						} else if(details[i].payment_id == 2) {		// Semi-Annual
+		 	 							if(fees.payment_id == 1) {
+		 	 								
+						 				} else if(fees.payment_id == 2) {
+
+						 				}
+		 	 						} else if(details[i].payment_id == 3) {		// Quarterly
+		 	 							if(fees.payment_id == 1) {
+		 	 								values = $.parseJSON(fees.value);
+				 	 						value = '<div class="range-list">' +
+												'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+												'<div class="slide-range" style="display: none;">';
+											
+											for(index in values) {
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+												var cp = parseFloat(details[i].capital),
+													min = parseFloat(values[index].min),
+													max = parseFloat(values[index].max);
+
+												// console.info(cp + ' >=' + min + ' = ');
+												// console.info(cp >= min);
+												// console.log('-------------------------------')
+												// console.info(cp + ' <=' + max + ' = ');
+												// console.info(cp <= max);
+												if(cp >= min && cp <= max) {
+													subtotal = parseFloat(values[index].value);
+													atfo = subtotal;
+												} else {
+													subtotal = 0;
+													atfo = 0;
+												}
+											}
+											
+											value += '</div></div>';
+											annually = annually + atfo;
+											// console.log('Formula Annual: ' + atfo + ' = ' + subtotal + ' Quarterly First Payment for ' + fees.tfo + ' Annually Total: ' + annually);
+		 	 							} else if(fees.payment_id == 3) {
+		 	 								values = $.parseJSON(fees.value);
+				 	 						value = '<div class="range-list">' +
+												'<p class="btn btn-xs btn-info show-range">Click to view Range <span class="caret"></span></p>' +
+												'<div class="slide-range" style="display: none;">';
+											
+											for(index in values) {
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].min)) + '</span> - ';
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].max)) + '</span> = ';
+												value += '<span class="badge badge-default">&#8369;' + currencyFormat(parseFloat(values[index].value)) + '</span><br />';
+												var cp = parseFloat(details[i].capital),
+													min = parseFloat(values[index].min),
+													max = parseFloat(values[index].max);
+
+												// console.info(cp + ' >=' + min + ' = ');
+												// console.info(cp >= min);
+												// console.log('-------------------------------')
+												// console.info(cp + ' <=' + max + ' = ');
+												// console.info(cp <= max);
+												if(cp >= min && cp <= max) {
+													subtotal = parseFloat(values[index].value);
+													qtfo = subtotal / 4;
+												} else {
+													subtotal = 0;
+													qtfo = 0;
+												}
+											}
+											
+											value += '</div></div>';
+											pquarter = pquarter + qtfo;
+											// console.log('Formula Quarterly: ' + qtfo + ' = ' + subtotal + ' / 4 Quarterly Payment for ' + fees.tfo + ' Quarter Total: ' + pquarter);
+						 				}
+		 	 						}
+		 	 					}							
+		 	 					total += subtotal;								
+							
+		 	 					if(details[i].payment_id == 1) {		// Annually
+	 	 							if(fees.payment_id == 1) {				// Annually
+		 	 							$('<td />', { text: fees.tfo }).appendTo(tr);
+				 	 					$('<td />', { html: value }).appendTo(tr);
+				 	 					$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+					 				}
+	 	 						} else if(details[i].payment_id == 2) {		// Semi-Annual
+	 	 							if(fees.payment_id == 1) {
+	 	 								$('<td />', { text: fees.tfo }).appendTo(tr);
+				 	 					$('<td />', { html: value }).appendTo(tr);
+				 	 					$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+					 				} else if(fees.payment_id == 2){ //alert(fees.payment_id);	
+										$('<td />', { text: fees.tfo }).appendTo(tr);
+				 	 					$('<td />', { html: value }).appendTo(tr);
+				 	 					$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+										
+									}
+	 	 						} else if(details[i].payment_id == 3) {		// Quarterly
+	 	 							if(fees.payment_id == 1) {
+	 	 								$('<td />', { text: fees.tfo }).appendTo(tr);
+				 	 					$('<td />', { html: value }).appendTo(tr);
+				 	 					$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+	 	 							} else if(fees.payment_id == 3) {
+	 	 								$('<td />', { text: fees.tfo }).appendTo(tr);
+				 	 					$('<td />', { html: value }).appendTo(tr);
+				 	 					$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right">' + currencyFormat(subtotal) + '</span>' }).appendTo(tr);
+					 				}
+	 	 						}
+		 	 					
+ 	 						}
+							
+ 	 						form.find('a.clear-requirements').data('app-id', details[i].app_id);
+ 	 						form.find('a.clear-requirements').data('nature-id', details[i].buss_nature_id);
+ 	 						form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+							
+							/*******************for breakdown*********************/
+							
+								// Show Breakdown for annual
+							if (details[0].payment_id == 1){
+								var breakdown = $('div.row.annual'),
+									atable = breakdown.find('table');
+									
+								atable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+								atable.find('tbody').html('');
+								breakdown.show();
+								$('div.row.quarterly').hide();
+								$('div.row.bi-annual').hide();
+								var first = $('<tr />').appendTo(atable.find('tbody'));
+
+								$('<td />', { text: 'First' }).appendTo(first);
+								$('<td />', { text: 'ASAP' }).appendTo(first);
+								$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( total )) + '</strong></span>' }).appendTo(first);
+								breakdowns.push({'label': 'First','dues' : dues[0],'value': (total),'stat' : 'UnPaid'});
+								breakdownsJSON = JSON.stringify(breakdowns);
+							}
+							// Show Breakdown for bi-annual
+							if (details[0].payment_id == 2){
+								$('div.row.annual').hide();
+								var breakdown = $('div.row.bi-annual'),
+									btable = breakdown.find('table');
+									
+								btable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+								btable.find('tbody').html('');
+								breakdown.show();
+								$('div.row.annual').hide();
+								$('div.row.quarterly').hide();
+								var first = $('<tr />').appendTo(btable.find('tbody'));
+								
+								$('<td />', { text: 'First Bi-Annual Payment' }).appendTo(first);
+								$('<td />', { text: dues[0] }).appendTo(first);
+								$('<td />', { text: ''}).appendTo(first);
+								$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( annually + biannual )) + '</strong></span>' }).appendTo(first);
+								//alert('biannual='+biannual + 'annually='+annually);
+								breakdowns.push({'label': 'First Bi-Annual Payment','Dues' : dues[0],'value': (annually + biannual),'stat' : 'UnPaid'});
+								var second = $('<tr />').appendTo(btable.find('tbody'));
+
+								$('<td />', { text: 'Second Bi-Annual Payment' }).appendTo(second);
+								$('<td />', { text: dues[1] }).appendTo(second);
+								$('<td />', { text: ''}).appendTo(second);
+								$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(biannual)) + '</strong></span>' }).appendTo(second);
+								breakdowns.push({'label': 'First Bi-Annual Payment','Dues' : dues[1],'value': (biannual),'stat' : 'UnPaid'});
+								breakdownsJSON = JSON.stringify(breakdowns);
+							}
+							// Show Breakdown for quarterly
+							if(details[0].payment_id == 3) { // Quarterly
+								$('div.row.bi-annual').hide();
+								
+								var breakdown = $('div.row.quarterly'),
+									qtable = breakdown.find('table');
+
+								qtable.find('th.payment_mode').text('Payment Mode : '+capitalize(details[0].payment_type));
+								qtable.find('tbody').html('');
+								breakdown.show();
+								$('div.row.bi-annual').hide();
+								$('div.row.annual').hide();	 					
+								for ( k in due){
+								alert(k);
+								var first = $('<tr />').appendTo(qtable.find('tbody'));
+									if (k==0){ alert(due[k].value);
+										$('<td />', { text: due[k].field + ' Payment' }).appendTo(first);
+										$('<td />', { text: due[k].value }).appendTo(first);
+										$('<td />', { text: ''}).appendTo(first);
+										$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat(annually + pquarter)) + '</strong></span>' }).appendTo(first);
+										breakdowns.push({'label': due[k].field + ' Payment','dues' : due[k].value,'value': (annually + pquarter),'stat' : 'UnPaid'});
+									 } else {
+										$('<td />', { text: due[k].field + ' Payment' }).appendTo(first);
+										$('<td />', { text: due[k].value }).appendTo(first);
+										$('<td />', { text: ''}).appendTo(first);
+										$('<td />', { html: '<span class="pull-left">&#8369;</span><span class="pull-right"><strong>' + currencyFormat(parseFloat( pquarter )) + '</strong></span>' }).appendTo(first);						
+										breakdowns.push({'label': due[k].field + ' Payment ','dues' : due[k].value,'value': (total),'stat' : 'UnPaid'});
+										breakdownsJSON = JSON.stringify(breakdowns);
+									}					
+								}
+							}
+							//alert('duh');
+							breakdownsJSON = JSON.stringify({breakdowns:breakdowns}); //alert(breakdownsJSON);
+							console.log('jajaja='+breakdownsJSON);
+							form.find('form.re-assessment input[name="app_id"]').val(details[i].app_id);
+							form.find('form.re-assessment input[name="total_tax_due"]').val(total);
+							form.find('form.re-assessment input[name="application_id"]').val(details[i].application_id);
+							/*******************end of breakdown***/
+							
+							
+							
+							if(details[0].payment_id == 1) { //Annually Payment
+								form.find('form.re-assessment input[name="payment"]').val('annual');
+								form.find('form.re-assessment input[name="annually"]').val(parseFloat(annually));
+								form.find('form.re-assessment input[name="quarterly"]').val(0);
+								form.find('form.re-assessment input[name="semi_annually"]').val(0);
+							} else if(details[0].payment_id == 2) { //Semi-Annual Payment
+								form.find('form.re-assessment input[name="payment"]').val('first_bi_annual');
+								form.find('form.re-assessment input[name="annually"]').val(0);
+								form.find('form.re-assessment input[name="semi_annually"]').val(parseFloat(annually + biannual));
+								form.find('form.re-assessment input[name="quarterly"]').val(0);
+							} else if(details[0].payment_id == 3) { // Quarterly Payment
+								form.find('form.re-assessment input[name="payment"]').val(parseFloat(total));								
+								form.find('form.re-assessment input[name="first_quarter"]').val(parseFloat(annually + pquarter));
+								form.find('form.re-assessment input[name="rem_quarter"]').val(parseFloat(pquarter));
+								form.find('form.re-assessment input[name="semi_annually"]').val(0);
+							}
+							
+ 	 					}).end()
+ 	 					.find('').each(function() {
+
+ 	 					}).end().appendTo(business_natures);
+ 	 				}
+
+ 	 				// // form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+ 	 				// // form.find('.totals span.total-amount').text(incrementor());
+ 	 				// // incrementor(form.find('.totals span.total-amount'), total);
+ 	 				// form.find('.totals span.total-amount').text(currencyFormat(parseFloat(total)));
+ 	 			} else {
+ 	 				alert('error');
+ 	 			}
+ 	 		}
+ 	 	});
+	});
+ 	 });
+	 /*------------------------------------
+	* Adding and editing lines of business
+	*------------------------------------*/	
+	
+	$('#payment-form').on('keyup', '.method-cash input[name="cash_tendered"]', function(e) {
+		var total = parseFloat($('#payment-form').find('input[name="paid_tax"]').val()),
+			change = $(this).parent().parent().parent().find('input[name="change"]'),
+			value = parseFloat($(this).val()),
+			temp = 0;
+
+		//temp = value - total;
+		temp = value - total
+		if(temp != NaN && temp > 0) {
+			change.val(temp);
+		} else {
+			change.val(0);
+		}
+		
+	});
+	/*------------------------------------
+	*Payment mode
+	*------------------------------------*/
+	/*-----------------------------------
+	*Boloi wants to try
+	*-----------------------------------*/
+	$('table#business-payment tbody').on('click', 'a.selectpayer', function(e) {
+		e.preventDefault();
+		var data = $(this).data(),
+			modal = $('#payment-form');
+
+		$('.save-cash').hide();
+		$('.save-check').hide();
+		$('#form-cash')[0].reset();
+		$('#form-check')[0].reset();
+
+		modal.modal('show');
+		
+		$.getJSON(baseurl + 'fees/api/payment/assessment/' + data.assessmentid, function(result) {
+
+			if(result.error === 0) {
+				var breakdowns_container = [],
+					breakdownsJSON = "",
+					fields = modal.find('.details'),
+					owner = result.data.owner,
+					details = result.data.record,
+					//breakdowns = result.data.owner.breakdown,
+					breakdown = modal.find('table.annual tbody'),
+					//breakdown =  $('div.row.annual1'),
+					total = 0;
+				//console.log('test');
+			    	//alert(owner.payment_type);
+				fields.find('span.trans-type').text(capitalize(owner.application_type));
+				fields.find('span.payment-mode').text(capitalize(owner.payment_type));
+				fields.find('span.business-nature').text(capitalize(owner.business_nature));
+				// fields.find('span.payment-status').text(capitalize(details.status));
+				fields.find('span.owner').text(capitalize(owner.owner));
+				fields.find('span.address').text(capitalize(owner.address));
+				fields.find('span.contact-number').text(owner.contact_number);
+
+				fields.find('input[name="assessment_id"]').val(owner.assessment_id);
+				fields.find('input[name="owner_id"]').val(owner.owner_id);
+				fields.find('input[name="buss_id"]').val(owner.buss_id);
+				fields.find('input[name="total_amount"]').val(owner.total);
+
+				// fields.find('input[name="change"]').prop('disabled', true);
+
+				breakdown.html('');
+				$('.annual').show();
+				//modal.find('span.payment-total').text(currencyFormat(parseFloat(owner.total)));
+				//qtable.find('tbody').html('');
+				// Disabled for now				
+			 
+				for(i in owner.breakdowns) {
+					//var tfo = result.data.tfos[i],
+					  var value = owner.breakdowns[i],
+						  tr = $('<tr />').appendTo(breakdown);
+						
+					//alert(value.label);
+					
+					$('<td />', { text: capitalize(value.label.replace(/_/g, ' '))}).appendTo(tr);
+					$('<td />', { text: value.dues}).appendTo(tr);
+					$('<td />', { html: '<span class="pull-left"></span>' +
+						'<span class="pull-left">&#8369;</span>' +
+						'<span class="pull-right">' + currencyFormat(parseFloat(value.value)) + '</span>' }).appendTo(tr);
+					//
+					$('<td />', { text: capitalize(value.stat)}).appendTo(tr);
+					if (value.stat === 'Paid'){					
+					$('<td />', { html: '<div class="payment-method">'+
+										'<a href="#" class=" method cash btn btn-success btn-xs method-cash" data-tfo_amount = "'+value.value+'" data-dues= "'+value.dues+'"  data-status ="'+value.stat+'"data-label = "'+value.label+'" data-payment_mode = "'+owner.payment_id+'" disabled '+										
+										' ><i class="fa fa-money"></i> CASH</a>'+
+										'<a href="#" class="method check btn btn-info btn-xs"><i class="fa fa-check"></i> CHECK</a>'+
+										'</div>' }).appendTo(tr);
+					} else {
+						$('<td />', { html: '<div class="payment-method">'+
+										'<a href="#" class=" method cash btn btn-success btn-xs method-cash" data-tfo_amount = "'+value.value+'" data-dues= "'+value.dues+'"  data-status ="'+value.stat+'"data-label = "'+value.label+'" data-payment_mode = "'+owner.payment_id+'" '+										
+										' ><i class="fa fa-money"></i> CASH</a>'+
+										'<a href="#" class="method check btn btn-info btn-xs"><i class="fa fa-check"></i> CHECK</a>'+
+										'</div>' }).appendTo(tr);
+					}
+					 breakdowns_container.push({'label': value.label,'dues' : value.dues,'value': value.value,'stat' : value.stat});					 
+					 breakdownsJSON = JSON.stringify(breakdowns_container);
+					//fields.find('input[name="breakdowns"]').val(owner.breakdowns[i]);
+					
+						//if (tfo.amount === '' || tfo.amount === 'undefined'){ total+=0.0;
+						//} else { total += parseFloat(tfo.amount); } "' + details.owner_id + '"
+						total += parseFloat(value.value);
+				}
+				fields.find('input[name="breakdowns"]').val(breakdownsJSON);
+				var tr2 = $('<tr />').appendTo(breakdown);
+					//$('<tr />', {}).appendTo(tr);
+					$('<td />', { text: '' }).appendTo(tr2);
+					$('<td />', { text: 'Total Php'}).appendTo(tr2);
+					$('<td />', { html: '<span class="pull-left"></span>' + 
+								 '<span class="pull-left">&#8369;</span>' +  
+								 '<span class="pull-right">' + currencyFormat(parseFloat(total)) + '</span>' +
+								 '<input type="hidden" name="total" id="total" value="'+total+'"/>'
+								 }).appendTo(tr2);
+					$('<td />', { text: ''}).appendTo(tr2);
+					$('<td />', { text: ''}).appendTo(tr2);
+					//alert();
+				/* if(total == owner.total) {
+					modal.find('span.payment-total').text(currencyFormat(parseFloat(owner.total)));
+				} else { alert(total);
+					modal.find('span.payment-total').text('Amount Mismatched');
+				} */
+			} else {
+
+			}
+		});		
+	});
+
+	$('#payment-form').on('click','a.method-cash', function(e) {
+	//$('a.method-cash').on('click', function(e) {
+		e.preventDefault();
+		var d = $(this).data(),
+			breakdowns = [],
+		    method = $(this);
+//			alert(d.tfo_amount);
+	
+		if(method.hasClass('cash')) {
+			$('.method-check').fadeOut(function() {
+			    $('.method-cash').find('input[name="or_number"]').val('');
+				$('.method-cash').find('input[name="cash_tendered"]').val('');
+				$('.method-cash').find('input[name="change"]').val(0);
+				$('.method-cash').find('input[name="paid_tax"]').val('');
+				$('.method-cash').find('input[name="total_amount"]').val('');
+				$('.method-cash').find('input[name="balance"]').val('');
+				$('.method-cash').find('input[name="paid_breakdowns"]').val('');
+				var balance = 0,
+					breakdowns = [],
+					breakdownsJSON = "",
+					total_amount = $('#payment-form').find('input[name="total_amount"]').val(),
+					paid_tax = $('table.cash-click').find('input[name="paid_tax"]').val(d.tfo_amount);
+				
+				balance = parseFloat((total_amount) - (d.tfo_amount));
+				$('.method-cash').hide().fadeIn();
+				$('.method-cash').find('input[name="paid_tax"]').val(d.tfo_amount);
+				$('.method-cash').find('input[name="total_amount"]').val(total_amount);
+				$('.method-cash').find('input[name="balance"]').val(balance);
+				$('.method-cash').find('input[name="payment_mode"]').val(d.payment_mode);
+			    breakdowns.push({'label': d.label,'dues' : d.dues,'value': d.tfo_amount,'stat' :  d.stat});
+				breakdownsJSON = JSON.stringify(breakdowns);
+				$('.method-cash').find('input[name="paid_breakdowns"]').val(breakdownsJSON);
+			});
+		} else if(method.hasClass('check')) {
+			$('.method-cash').fadeOut(function() {
+				$('.method-check').hide().fadeIn();
+			});
+		}
+	});
+	
+	
+	$('select[name="occupancy_id"]').on('change', function (e) {
+		var val = $(this).val();
+		 if(val == '1'){
+			$('.rental_info').show();
+			$('input[name="leasor_first_name"]').focus();
+		} else {
+			$('.rental_info').hide();
+		}
+	});
+	
+	$('input:radio[name=govt_incentive]').click( function () {
+	  var value = $(this).val();
+	 // alert('value = '+value);
+		   if (value === '1') { 
+				$('.govt-entity').show();
+				$('input[name="govt_entity"]').focus();
+		   } else {
+				$('.govt-entity').hide();
+			}
+	});
+	
+	$('#registered_date').on('click',function (e) {
+	   $('#registered_date').datepicker();
+	});
+})(jQuery);

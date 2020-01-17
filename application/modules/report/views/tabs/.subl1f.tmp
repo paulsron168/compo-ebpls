@@ -1,0 +1,67 @@
+<div class="tab-pane fade in active" id="business_report">
+	<div class="portlet">
+		<div class="owner-message"></div>		
+
+		<div class="portlet-content">
+			<!-- <table class="table table-striped table-bordered table-hover table-highlight"> -->
+			<table id="business-report" class="table table-striped table-bordered table-hover table-highlight" 
+				data-provide="datatable" 
+				data-display-rows="10"
+				data-info="true"
+				data-search="true"
+				data-length-change="true"
+				data-paginate="true"
+			>
+			<h3>
+			<?php 
+				echo 'As of '.date('F d').','.date('Y');
+			?>
+			</h3>
+				<thead>
+					<tr>
+						<th>Business Name</th>
+						<th>Business Owner</th>
+						<th>Barangay</th>
+						<th>Business Nature</th>
+						<th>Capital/Gross</th>
+						<th>Application Type</th>
+						
+						
+						
+					</tr>
+				</thead>
+				<tbody>
+					<?php  if (!empty($barangay)) {
+						foreach ($barangay as $t) { ?>
+							<tr>	
+
+								<td><?php //echo $t->brgy_id;?></td>
+								
+								<td><?php //echo $t->garbage;?></td>
+								<td><?php echo $t->brgy;?></td>
+								<td><?php echo 'Business Owner';?></td>
+							</tr>
+					<?php } 
+					} else { ?>
+							<tr>
+								<td> <?php //print_r($barangay);?>
+									<div class="col-sm-6">
+										<div class="form-group">
+											<?php echo form_label('Barangay:', 'brgy_id', array('class' => 'col-sm-4 control-label')); ?>
+											<div class="col-sm-8">
+												<?php //echo form_dropdown('brgy_id', $barangay, '', 'class="form-control"'); ?>
+											</div>
+										</div>
+									</div>
+								</td>
+							</tr>
+							<tr>
+								<td colspan="6">No report found in the database.					
+								</td>
+							</tr>
+					<?php } ?>
+				</tbody> 
+			</table>
+		</div> <!-- End of Portlet Content -->
+	</div> <!-- End of Portlet -->
+</div> <!-- End of Application Tab -->	
